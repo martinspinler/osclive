@@ -121,9 +121,9 @@ class StudioLive1602(SLRemote):
     }
 
 
-    def __init__(self, debug = False, local = False):
+    def __init__(self, debug = False):
         # Some magic numbers
-        SLRemote.__init__(self, [0x04ffffff, 0x000a9204, 8], debug, local)
+        SLRemote.__init__(self, [0x04ffffff, 0x000a9204, 8], debug)
 
         # Input channel mappings
         self.mapchannel.update({k:v for k,v in (("ch%d"  %(d+1),"in%d,0"%(d+ 0)) for d in range(12))})

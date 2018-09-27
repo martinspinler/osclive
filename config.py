@@ -7,9 +7,7 @@ args.slip       = '127.0.0.1'
 args.oscip      = '0.0.0.0'
 args.oscport    = 12101
 args.oscname    = "OSCServer_" + socket.gethostname()
-
 args.debug      = True
-args.virtual    = False
 
 args.active_channels = {
 	"ch1" : "Ch 1",
@@ -34,3 +32,7 @@ args.active_auxs = {
 	"fxa" : "FxA",
 	"fxb" : "FxB",
 }
+
+args.transport_device = "ASIO PreSonus FireStudio"
+args.transport_samplerate = 44100
+args.transport_channels = range(16)

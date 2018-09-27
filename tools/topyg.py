@@ -18,6 +18,8 @@ pages = {}
 pages[0] = create_page("1", "Mixer")
 pages[1] = create_page("2", "Aux")
 pages[2] = create_page("3", "Channel")
+pages[3] = create_page("4", "Transport")
+pages[4] = create_page("5", "Equalizer")
 
 root = create_layout(SW, SH)
 for p in pages:
@@ -147,6 +149,38 @@ p.append(create_label(None, color, "/channel/gain_db"                   , MAINX 
 for i in range(len(CHAN)):
     p.append(create_push (None, color, "/channel/sel/%s"       % CHAN[i], i*INW+20,  10   ,   FW   ,   40))
     p.append(create_label(None, color, "/channel/sel/%s_label" % CHAN[i], i*INW+20,  10   ,   FW   ,   40, "%s" %  CHAN[i]))
+
+# ########################################
+# Page 3
+p = pages[3]
+
+p.append(create_push  (None, color, "/transport/prev"                    , 320,  SH-280,  60,  60))
+p.append(create_label (None, color, "/transport/prevlabel"               , 320,  SH-280,  60,  60, "<<"))
+
+p.append(create_push  (None, color, "/transport/play"                    , 420,  SH-280,  60,  60))
+p.append(create_label (None, color, "/transport/playlabel"               , 420,  SH-280,  60,  60, "Play"))
+
+p.append(create_push  (None, color, "/transport/rec"                     , 520,  SH-280,  60,  60))
+p.append(create_label (None, color, "/transport/reclabel"                , 520,  SH-280,  60,  60, "Rec"))
+
+p.append(create_push  (None, color, "/transport/next"                    , 620,  SH-280,  60,  60))
+p.append(create_label (None, color, "/transport/nextlabel"               , 620,  SH-280,  60,  60, ">>"))
+
+
+p.append(create_label (None, color, "/transport/filename"                , 420,  SH-120,  60,  60, "Filename"))
+p.append(create_label (None, color, "/transport/time"                    , 420,  SH-200, 200,  60, "00:00:00.0"))
+
+p.append(create_toggle(None, color, "/transport/enableledbar"            ,  20,  SH-280,  60,  60))
+p.append(create_label (None, color, "/transport/enableledbarlabel"       ,  20,  SH-280,  60,  60, "LED"))
+
+p.append(create_toggle(None, color, "/transport/enablegeq"               ,  20,  SH-360,  60,  60))
+p.append(create_label (None, color, "/transport/enablegeqlabel"          ,  20,  SH-360,  60,  60, "GEQ"))
+
+# ########################################
+# Page 4
+p = pages[4]
+
+p.append(create_multifader(None, color, "/equalizer/main"                ,  20,  20,  SW-40,  SH-80, 31))
 
 # ########################################
 # Finish

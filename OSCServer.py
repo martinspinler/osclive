@@ -47,12 +47,14 @@ class ClientScanner(object):
         self.handler = handler
         self.localname = localname
     def remove_service(self, zeroconf, type, name):
-        self.handler.remove_client(name)
+        client = name.rsplit("." + type, 1)[0]
+        self.handler.remove_client(client)
     def add_service(self, zeroconf, type, name):
         info = zeroconf.get_service_info(type, name)
-        if name == self.localname:
+        client = name.rsplit("." + type, 1)[0]
+        if client == self.localname:
             return
-        self.handler.add_client(name, socket.inet_ntoa(info.address), info.port)
+        self.handler.add_client(client, socket.inet_ntoa(info.address), info.port)
 
 # Simple UDP handler
 class _UDPHandler(socketserver.BaseRequestHandler):

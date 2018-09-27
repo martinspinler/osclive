@@ -6,10 +6,9 @@ class SLRemote(object):
     # SL Remote server 
     # Code is based on implementation of vsl1818
 
-    def __init__(self, magic, debug = False, virtual = False):
+    def __init__(self, magic, debug = False):
         self.magic = magic
         self.debug = debug
-        self.virtual = virtual
         self.loaded = False
         self.killed = False
         self.connection = None
@@ -53,17 +52,14 @@ class SLRemote(object):
 
     # Main functions
     def connect(self, host, port, name="SL-Remote", ident="1BE8DC6BF62EA577B"):
-        if(self.virtual):
+        if not host:
+            self.loaded = True
             return
         assert not self.connection
         self.connection = socket(AF_INET, SOCK_STREAM)
         self.connection.connect((host, port))
         self.sendmsg(struct.pack("IIHH32s32s", self.magic[0], self.magic[1], 3, self.magic[2], ident.encode(), name.encode()))
 
-    def start(self):
-        if(self.virtual):
-            self.loaded = True
-            return
         print("SLRemote: starting update thread")
         self.update_thread = threading.Thread(target=self.update_process)
         self.update_thread.start()
@@ -180,7 +176,8 @@ class SLRemote(object):
             value = 0
 
         self.channels[channel][control] = value
-        if(self.virtual):
+
+        if not self.connection:
             for callback in self.update_callbacks:
                 callback(channel, control, value)
             return

@@ -157,6 +157,23 @@ def create_multitoggle(name, color, ctrl, x, y, w, h, c):
 	p.set("local_off", "false")
 	return p
 
+def create_multifader(name, color, ctrl, x, y, w, h, c, d='h'):
+	p = ET.Element("control")
+	p.set("name", b64(getname(name, "toggle")))
+	p.set("type", "multifader%s" % d)
+	p.set("color", color)
+	p.set("osc_cs", b64(ctrl))
+	p.set("x", str(y))
+	p.set("y", str(x))
+	p.set("w", str(h))
+	p.set("h", str(w))
+	p.set("scalef", "0.0")
+	p.set("scalet", "1.0")
+	p.set("number", str(c))
+	p.set("inverted", "false")
+	p.set("centered", "false")
+	return p
+
 def create_layout(width, height):
 	root = ET.Element("layout")
 	root.set("version", "16")

@@ -1,3 +1,5 @@
+import os
+import datetime
 import time
 import math
 from pythonosc import dispatcher
@@ -40,9 +42,14 @@ class OSCClient(udp_client.UDPClient):
         udp_client.UDPClient.__init__(self, ip, port)
 
         self.dispatcher = dispatcher.Dispatcher()
-        self.server, self.active_channels, self.active_auxs = params
+        self.server, self.transport, self.active_channels, self.active_auxs = params
         self.server.add_update_callback(self.sl_control_handler)
         self.server.level_callbacks.append(self.sl_level_handler)
+
+        self.transport.setStatusCallback(self.transportCallback)
+        self.transportTime = 0
+        self.transportFilename = None
+        self.transportStatus = 0
 
         self.selaux = "aux1"
         self.selch = "ch1"
@@ -104,20 +111,26 @@ class OSCClient(udp_client.UDPClient):
 
         # PAGE "Equaliser"
 
+        # PAGE "Transport"
+        self.dispatcher.map("/transport/rec",  self.transport_control_handler, "rec")
+        self.dispatcher.map("/transport/play", self.transport_control_handler, "play")
+        self.dispatcher.map("/transport/prev", self.transport_control_handler, "prev")
+        self.dispatcher.map("/transport/next", self.transport_control_handler, "next")
+
     def init(self):
-		# PAGE "Main"
+        # PAGE "Main"
         for channel in channel_sel:
             for ctrl in ["gain"]:
                 value = self.server.get_control(channel, ctrl)
                 self.send(osc_create_msg("/%s/%s" % (channel, ctrl), value))
 
-		# PAGE "Aux": Update
+        # PAGE "Aux": Update
         self.aux_select_handler("/aux/sel/%s" % aux_sel[0], [aux_sel[0]], 1)
 
-		# PAGE "Channel": Update
+        # PAGE "Channel": Update
         self.channel_select_handler("/channel/sel/%s" % channel_sel[0], [channel_sel[0]], 1)
 
-		# Update labels
+        # Update labels
         for ch, name in self.active_channels.items():
             self.send(osc_create_msg("/%s/label" % ch, name))
             self.send(osc_create_msg("/aux/%s_label" % ch, name))
@@ -158,7 +171,6 @@ class OSCClient(udp_client.UDPClient):
                 self.osc_send_control("/channel/%s" % ctrl, value)
                 #if(ctrl == "eqlowgain"):
                 #    self.osc_send_control("/%s/gain_db" % channel, "%.1f" % float2db(value))
-
 
         #for i in range(1, CLIENT_CHANNELS+1):
         #    val = self.server.get_control(channel_map["in%d"%i], self.selaux)
@@ -218,3 +230,60 @@ class OSCClient(udp_client.UDPClient):
     def channel_control_extra_handler(self, addr, args, value):
         if (args[0] == "panreset"):
             self.server.set_control(self.selch, "pan", 0.5)
+
+    def transport_control_handler(self, addr, args, value):
+        if args[0] == "rec":
+            if self.transport.isRecording():
+                self.transport.recStop()
+            else:
+                if "recordings" not in os.listdir("."):
+                        os.mkdir("recordings")
+                self.transportFilename = datetime.datetime.now().strftime("recordings/rec_%Y%m%d_%H%M%S.wav")
+                self.transport.recStart(self.transportFilename)
+        elif args[0] == "play":
+            if self.transport.isPlaying():
+                self.transport.playStop()
+            else:
+                if not self.transportFilename:
+                        d = os.path.dirname("recordings")
+                        l = os.listdir("recordings")
+                        if l:
+                                self.transportFilename = os.path.join("recordings", l[0])
+                if not self.transportFilename:
+                        return
+
+                self.transport.playStart(self.transportFilename)
+        elif args[0] == "prev":
+            self.transport.playSkip(-1)
+        elif args[0] == "next":
+            self.transport.playSkip(1)
+
+    def transportCallback(self):
+        currentFrame = self.transport.currentTime / float(self.transport.samplerate)
+        x = int(currentFrame * 10)
+        if x != self.transportTime:
+            d = x % 10
+            s = (x / 10) % 60
+            m = (x / 600) % 60
+            h = (x / 36000) % 60
+
+            self.transportTime = x
+            self.send(osc_create_msg("/transport/time", str("%d:%d:%d.%d" % (h,m,s,d))))
+
+        if self.transport.isRecording() and self.transportStatus != 1:
+                self.transportStatus = 1
+                self.send(osc_create_msg("/transport/filename", self.transportFilename))
+                self.send(osc_create_msg("/transport/rec/color", "red"))
+                self.send(osc_create_msg("/transport/rec", "Stop"))
+        elif self.transport.isPlaying() and self.transportStatus != 2:
+                self.transportStatus = 2
+                self.send(osc_create_msg("/transport/filename", self.transportFilename))
+                self.send(osc_create_msg("/transport/play/color", "green"))
+                self.send(osc_create_msg("/transport/play", "Stop"))
+        elif not self.transport.isPlaying() and not self.transport.isRecording() and self.transportStatus != 0:
+                self.transportStatus = 0
+                self.send(osc_create_msg("/transport/rec/color", "yellow"))
+                self.send(osc_create_msg("/transport/play/color", "gray"))
+                self.send(osc_create_msg("/transport/rec",  "Rec"))
+                self.send(osc_create_msg("/transport/play", "Play"))
+
