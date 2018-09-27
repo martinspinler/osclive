@@ -1,9 +1,17 @@
-args            = lambda: None
-args.slip       = '127.0.0.1'
-args.oscip      = "192.168.137.1"
-args.oscport    = 12101
+import socket
 
-active_channels = {
+args            = lambda: None
+# Configure server parameters
+args.zcip       = []
+args.slip       = '127.0.0.1'
+args.oscip      = '0.0.0.0'
+args.oscport    = 12101
+args.oscname    = "OSCServer_" + socket.gethostname()
+
+args.debug      = True
+args.virtual    = False
+
+args.active_channels = {
 	"ch1" : "Ch 1",
 	"ch2" : "Ch 2",
 	"ch3" : "Ch 3",
@@ -18,7 +26,7 @@ active_channels = {
 	"ch12": "Ch 15/16",
 }
 
-active_auxs = {
+args.active_auxs = {
 	"aux1": "Aux1",
 	"aux2": "Aux2",
 	"aux3": "Aux3",

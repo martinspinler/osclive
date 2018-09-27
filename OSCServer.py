@@ -9,50 +9,50 @@ from pythonosc import osc_message
 # Client handler for UDP server
 class ClientHandler(socketserver.BaseRequestHandler):
     def __init__(self, client, clientparam, defaultport = 8080):
-        self.clientparam = clientparam
-        self.client = client
-        self.clients = {}
-        self.clientports = {}
         self.defaultport = defaultport
+        self.clientparam = clientparam
+        self.clienttype  = client
+        self.client_addr = {}
+        self.client_inst = {}
 
-    def remove_client(self, address):
-        assert address in self.clients
-        self.clients.remove(address)
-        self.clientports.remove(address)
-        print("Client removed", address, port)
-
-    def add_client(self, address, port):
-        if(address in self.clients):
-            self.clientports[address] = port
-            print("Client already exists", address, port)
+    def remove_client(self, name):
+        if name not in self.client_addr.keys():
+            print("Removing client %s: Error: not present" % name)
             return
-        client = self.client(address, port, self.clientparam)
-        self.clients[address] = client
-        self.clientports[address] = port
-        print("Client added", address, port)
+        client = self.client_addr[name]
+        print("Removing client %s" % name, client)
+        del self.client_inst[client]
+        del self.client_addr[name]
 
-    def handle_requst(self, client, request):
-        address, port = client
-        if(address not in self.clients):
-            # Try add default port
-            self.add_client(address, self.defaultport)
-        self.clients[address].handle_request(request)
+    def add_client(self, name, address, port):
+        if name in self.client_addr.keys():
+            print("Adding client %s: Error: already present" % name)
+            return
+        print("Adding client %s" % name, address, port)
+        self.client_addr[name] = address
+        self.client_inst[address] = self.clienttype(address, port, self.clientparam)
+
+    def handle_requst(self, sender, request):
+        address, port = sender
+        client = address
+
+        # Prevent handling unknown clients
+        if client not in self.client_inst:
+            return
+        self.client_inst[client].handle_request(request)
 
 # Client scanner for Zeroconf
 class ClientScanner(object):
-    def __init__(self, handler):
+    def __init__(self, handler, localname):
         self.handler = handler
+        self.localname = localname
     def remove_service(self, zeroconf, type, name):
-        info = zeroconf.get_service_info(type, name)
-        print("Removed Zeroconf client: %s. TODO!!!" % name)
-        #self.handler.remove_client(socket.inet_ntoa(info.address), info.port)
-
+        self.handler.remove_client(name)
     def add_service(self, zeroconf, type, name):
         info = zeroconf.get_service_info(type, name)
-        if(name == "OSCServer._osc._udp.local."):
+        if name == self.localname:
             return
-        print("New Zeroconf client: %s" % name)
-        self.handler.add_client(socket.inet_ntoa(info.address), info.port)
+        self.handler.add_client(name, socket.inet_ntoa(info.address), info.port)
 
 # Simple UDP handler
 class _UDPHandler(socketserver.BaseRequestHandler):

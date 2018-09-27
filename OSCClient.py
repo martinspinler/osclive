@@ -36,11 +36,11 @@ def osc_create_msg(addr, value):
     return msg
 
 class OSCClient(udp_client.UDPClient):
-    def __init__(self, ip, port, server):
+    def __init__(self, ip, port, params):
         udp_client.UDPClient.__init__(self, ip, port)
 
         self.dispatcher = dispatcher.Dispatcher()
-        self.server = server
+        self.server, self.active_channels, self.active_auxs = params
         self.server.add_update_callback(self.sl_control_handler)
         self.server.level_callbacks.append(self.sl_level_handler)
 
@@ -118,13 +118,13 @@ class OSCClient(udp_client.UDPClient):
         self.channel_select_handler("/channel/sel/%s" % channel_sel[0], [channel_sel[0]], 1)
 
 		# Update labels
-        for ch, name in active_channels.items():
+        for ch, name in self.active_channels.items():
             self.send(osc_create_msg("/%s/label" % ch, name))
             self.send(osc_create_msg("/aux/%s_label" % ch, name))
-        for ch, name in active_auxs.items():
+        for ch, name in self.active_auxs.items():
             self.send(osc_create_msg("/aux/sel/%s_label" % ch, name))
         #for ch in channel_sel:
-        #    if ch not in [i[0] for i in active_channels]:
+        #    if ch not in [i[0] for i in self.active_channels]:
         #        pass
 
     def sl_level_handler(self):
@@ -173,11 +173,11 @@ class OSCClient(udp_client.UDPClient):
         #for i in range(1,len(aux_sel)+1):
         #    self.send(osc_create_msg("/aux/sel/1/%i" % i, 0))
         #self.send(osc_create_msg("/aux/sel/1/%i" % index, 1))
-        for i in active_auxs:
-            self.send(osc_create_msg("/aux/sel/%s_label" % i, "%s" % active_auxs[i]))
+        for i in self.active_auxs:
+            self.send(osc_create_msg("/aux/sel/%s_label" % i, "%s" % self.active_auxs[i]))
             self.send(osc_create_msg("/aux/sel/%s_label/color" % i, "gray"))
             self.send(osc_create_msg("/aux/sel/%s/color" % i, "gray"))
-        self.send(osc_create_msg("/aux/sel/%s_label" % self.selaux, "--> %s <--" % active_auxs[self.selaux]))
+        self.send(osc_create_msg("/aux/sel/%s_label" % self.selaux, "--> %s <--" % self.active_auxs[self.selaux]))
         self.send(osc_create_msg("/aux/sel/%s_label/color" % self.selaux, "yellow"))
         self.send(osc_create_msg("/aux/sel/%s/color" % self.selaux, "yellow"))
         
@@ -191,11 +191,11 @@ class OSCClient(udp_client.UDPClient):
     def channel_select_handler(self, addr, args, value):
         self.selch = args[0]
 
-        for i in active_channels:
-            self.send(osc_create_msg("/channel/sel/%s_label" % i, "%s" % active_channels[i]))
+        for i in self.active_channels:
+            self.send(osc_create_msg("/channel/sel/%s_label" % i, "%s" % self.active_channels[i]))
             self.send(osc_create_msg("/channel/sel/%s_label/color" % i, "gray"))
             self.send(osc_create_msg("/channel/sel/%s/color" % i, "gray"))
-        self.send(osc_create_msg("/channel/sel/%s_label" % self.selch, "--> %s <--" % active_channels[self.selch]))
+        self.send(osc_create_msg("/channel/sel/%s_label" % self.selch, "--> %s <--" % self.active_channels[self.selch]))
         self.send(osc_create_msg("/channel/sel/%s_label/color" % self.selch, "yellow"))
         self.send(osc_create_msg("/channel/sel/%s/color" % self.selch, "yellow"))
             
