@@ -109,6 +109,9 @@ class OSCClient(udp_client.UDPClient):
         # PAGE "Effect"
 
         # PAGE "Equaliser"
+        for i in range(1,32):
+            ctrl = list(self.server.GEQ_CTRL.keys())[list(self.server.GEQ_CTRL.values())[i]]
+            self.dispatcher.map("/equalizer/main/%d"%i, self.eq_handler, "%s" % ctrl)
 
         # PAGE "Transport"
         self.dispatcher.map("/transport/rec",  self.transport_control_handler, "rec")
@@ -177,6 +180,10 @@ class OSCClient(udp_client.UDPClient):
 
         # PAGE "Effect"
         # PAGE "Equaliser"
+        if channel == "geq0":
+            index = self.server.GEQ_CTRL[ctrl]
+            if index > 0 and index <= 31:
+                self.osc_send_control("/equalizer/main/%d" % index, value)
 
     def aux_select_handler(self, addr, args, value):
         self.selaux = args[0]
@@ -229,6 +236,11 @@ class OSCClient(udp_client.UDPClient):
     def channel_control_extra_handler(self, addr, args, value):
         if (args[0] == "panreset"):
             self.server.set_control(self.selch, "pan", 0.5)
+
+    def eq_handler(self, addr, args, value):
+        # INFO: Universal Control fall when used
+        #self.server.set_control("geq0", args[0], value)
+        pass
 
     def transport_control_handler(self, addr, args, value):
         if args[0] == "rec":

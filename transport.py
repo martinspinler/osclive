@@ -49,10 +49,18 @@ class Transport():
 		self.blocksize = 2048
 
 		# TODO
-		if self.device == "ASIO PreSonus FireStudio":
-			self.asioSettings = sd.AsioSettings(self.channels)
+		if sd.query_hostapis()[0]['name'] == "Core Audio":
+			ch = self.channels + ([-1]*14)
+			self.extraInputSettings = sd.CoreAudioSettings(ch, True, True)
+			self.extraOutputSettings = sd.CoreAudioSettings(ch, True, True)
+
+			self.extraInputSettings = None
+			self.extraOutputSettings = None
+		elif self.device == "ASIO PreSonus FireStudio":
+			self.extraInputSettings = self.extraOutputSettings = sd.AsioSettings(self.channels)
 		else:
-			self.asioSettings = None
+			self.extraOutputSettings = None
+			self.extraInputSettings = None
 
 	def setStatusCallback(self, callback):
 		self.callbacks += [callback]
@@ -104,12 +112,13 @@ class Transport():
 			stream = sd.RawOutputStream(
 				samplerate=f.samplerate, blocksize=self.blocksize,
 				device=self.device, channels=f.channels, dtype='float32',
-				callback=self.playCallback, finished_callback=event.set)
+				callback=self.playCallback, finished_callback=event.set, extra_settings=self.extraOutputSettings)
 
 			try:
 				with stream:
 					print("Start playing file", filename)
-					timeout = self.blocksize * self.buffersize / f.samplerate
+					timeout = self.blocksize * self.buffersize / f.samplerate * 8
+
 					while data and self.control == 2:
 						data = f.buffer_read(self.blocksize, dtype='float32')
 						self.pq.put(data, timeout=timeout)
@@ -138,7 +147,7 @@ class Transport():
 	def recStartThread(self, filename):
 		try:
 			with sf.SoundFile(filename, mode='w', samplerate=self.samplerate, channels=len(self.channels)) as file:
-				stream = sd.InputStream(samplerate=self.samplerate, device=self.device, channels=len(self.channels), callback=self.recCallback, extra_settings=self.asioSettings)
+				stream = sd.InputStream(samplerate=self.samplerate, blocksize=self.blocksize, device=self.device, channels=len(self.channels), callback=self.recCallback, extra_settings=self.extraInputSettings)
 				with stream:
 					self.status = 1
 					print("Start recording to file", filename)
@@ -148,10 +157,9 @@ class Transport():
 					for cb in self.callbacks:
 						cb()
 
-
 		except Exception as e:
 			print(e)
-			self.status = 0
+		self.status = 0
 
 	def playCallback(self, outdata, frames, time, status):
 		assert frames == self.blocksize
@@ -176,7 +184,7 @@ class Transport():
 			cb()
 
 	def recCallback(self, indata, frames, time, status):
-		self.currerntTime = self.currentTime + frames
+		self.currentTime = self.currentTime + frames
 		if status:
 			print(status, file=sys.stderr)
 		self.rq.put(indata.copy())
