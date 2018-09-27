@@ -86,22 +86,21 @@ class OSCClient(udp_client.UDPClient):
         self.send(msg)
 
     def init_dispatcher(self):
-        # PAGE "Main"
+        # PAGE "Mixer"
         for channel in channel_sel:
-            self.dispatcher.map("/%s/gain" % channel, self.main_handler, channel)
+            self.dispatcher.map("/mixer/%s/gain" % channel, self.main_handler, channel)
 
         # PAGE "Aux"
         for i in aux_sel:
             self.dispatcher.map("/aux/sel/%s" % i, self.aux_select_handler, i)
 
         for i in range(1, CLIENT_CHANNELS+1):
-            self.dispatcher.map("/aux/ch%d"%i, self.aux_volume_handler, "ch%d" % i)
-        self.dispatcher.map("/aux/main", self.aux_main_volume_handler)
+            self.dispatcher.map("/aux/ch%d/gain"%i, self.aux_volume_handler, "ch%d" % i)
+        self.dispatcher.map("/aux/main/gain", self.aux_main_volume_handler)
 
         # PAGE "Channel"
         for i in channel_sel:
             self.dispatcher.map("/channel/sel/%s" % i, self.channel_select_handler, "%s" % i, i)
-        #self.dispatcher.map("/channel/sel/1/%d" % (CLIENT_CHANNELS+1), self.channel_select_handler, "main", 8)
 
         for control in self.server.CHANNEL_CTRL:
             self.dispatcher.map("/channel/%s" % control, self.channel_control_handler, control)
@@ -122,7 +121,7 @@ class OSCClient(udp_client.UDPClient):
         for channel in channel_sel:
             for ctrl in ["gain"]:
                 value = self.server.get_control(channel, ctrl)
-                self.send(osc_create_msg("/%s/%s" % (channel, ctrl), value))
+                self.send(osc_create_msg("/mixer/%s/%s" % (channel, ctrl), value))
 
         # PAGE "Aux": Update
         self.aux_select_handler("/aux/sel/%s" % aux_sel[0], [aux_sel[0]], 1)
@@ -132,8 +131,8 @@ class OSCClient(udp_client.UDPClient):
 
         # Update labels
         for ch, name in self.active_channels.items():
-            self.send(osc_create_msg("/%s/label" % ch, name))
-            self.send(osc_create_msg("/aux/%s_label" % ch, name))
+            self.send(osc_create_msg("/mixer/%s/label" % ch, name))
+            self.send(osc_create_msg("/aux/%s/label" % ch, name))
         for ch, name in self.active_auxs.items():
             self.send(osc_create_msg("/aux/sel/%s_label" % ch, name))
         #for ch in channel_sel:
@@ -143,8 +142,8 @@ class OSCClient(udp_client.UDPClient):
     def sl_level_handler(self):
         for ch in range(1, CLIENT_CHANNELS+1):
             value = self.server.get_level("ch%d" % ch) / 32.0
-            self.osc_send_control("/ch%d/level" % ch, value)
-        self.osc_send_control("/main/level", self.server.get_level("main")/32.0)
+            self.osc_send_control("/mixer/ch%d/level" % ch, value)
+        self.osc_send_control("/mixer/main/level", self.server.get_level("main")/32.0)
         self.osc_send_control("/channel/level", self.server.get_level(self.selch)/32.0)
 
     def sl_control_handler(self, channel, ctrl, value):
@@ -153,17 +152,17 @@ class OSCClient(udp_client.UDPClient):
         # PAGE "Main"
         if(ctrl == "gain" and channel in ["ch%d"%ch for ch in range(1,CLIENT_CHANNELS+1)]) or \
           (ctrl == "gain" and channel == "main"):
-            self.osc_send_control("/%s/%s" % (channel, ctrl), value)
-            self.osc_send_control("/%s/gain_db" % channel, float2db(value))
-            self.osc_send_control("/%s/%s" % (channel, ctrl), value)
+            self.osc_send_control("/mixer/%s/%s" % (channel, ctrl), value)
+            self.osc_send_control("/mixer/%s/gain_db" % channel, float2db(value))
+            self.osc_send_control("/mixer/%s/%s" % (channel, ctrl), value)
 
         # PAGE "Aux"
         if(ctrl == self.selaux and channel in ["ch%d"%ch for ch in range(1,CLIENT_CHANNELS+1)]):
-            self.osc_send_control("/aux/%s" % channel, value)
-            self.osc_send_control("/aux/%s_gain_db" % channel, float2db(value))
+            self.osc_send_control("/aux/%s/gain" % channel, value)
+            self.osc_send_control("/aux/%s/gain_db" % channel, float2db(value))
         if(ctrl == "gain" and channel == self.selaux):
-            self.osc_send_control("/aux/gain", value)
-            self.osc_send_control("/aux/gain_db", float2db(value))
+            self.osc_send_control("/aux/main/gain", value)
+            self.osc_send_control("/aux/main/gain_db", float2db(value))
 
         # PAGE "Channel"
         if(self.selch == channel):
@@ -195,10 +194,10 @@ class OSCClient(udp_client.UDPClient):
         
         for i in range(1, CLIENT_CHANNELS+1):
             val = self.server.get_control("ch%d" % i, self.selaux)
-            self.send(osc_create_msg("/aux/ch%d" % i, val))
+            self.send(osc_create_msg("/aux/ch%d/gain" % i, val))
 
         val = self.server.get_control(self.selaux, "gain")
-        self.send(osc_create_msg("/aux/main", val))
+        self.send(osc_create_msg("/aux/main/gain", val))
 
     def channel_select_handler(self, addr, args, value):
         self.selch = args[0]
@@ -268,7 +267,7 @@ class OSCClient(udp_client.UDPClient):
             h = (x / 36000) % 60
 
             self.transportTime = x
-            self.send(osc_create_msg("/transport/time", str("%d:%d:%d.%d" % (h,m,s,d))))
+            self.send(osc_create_msg("/transport/time", str("%02d:%02d:%02d.%d" % (h,m,s,d))))
 
         if self.transport.isRecording() and self.transportStatus != 1:
                 self.transportStatus = 1

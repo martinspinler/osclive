@@ -15,11 +15,12 @@ INW   = int((SW - MAINW - 30) / INS)
 FW    = INW - 20
 
 pages = {}
-pages[0] = create_page("1", "Mixer")
-pages[1] = create_page("2", "Aux")
-pages[2] = create_page("3", "Channel")
-pages[3] = create_page("4", "Transport")
-pages[4] = create_page("5", "Equalizer")
+pages[0] = create_page("mixer",     "Mixer")
+pages[1] = create_page("aux",       "Aux")
+pages[2] = create_page("channel",   "Channel")
+pages[3] = create_page("transport", "Transport")
+pages[4] = create_page("misc",      "Misc")
+pages[5] = create_page("geq",       "Equalizer")
 
 root = create_layout(SW, SH)
 for p in pages:
@@ -44,9 +45,9 @@ X2 = int(SW/5*3)
 # Page 0
 p = pages[0]
 for i in range(INS):
-    create_led_bar(p, "/%s/level" % CHAN[i], i*INW+10, 30)
+    create_led_bar(p, "/mixer/%s/level" % CHAN[i], i*INW+10, 30)
 
-create_led_bar(p, "/main/level", SW-MAINW-20, 30)
+create_led_bar(p, "/mixer/main/level", SW-MAINW-20, 30)
 
 LY = int((SH - 80)*0.75) + 20
 
@@ -54,37 +55,40 @@ color = "red"
 for i in range(INS):
     if (i >= 8):
         color = "yellow"
-    p.append(create_fader(None, color, "/%s/gain"              % CHAN[i], i*INW+20, 30    , FW   , SH-80))
-    p.append(create_label(None, color, "/%s/label"             % CHAN[i], i*INW+20,  0    , FW   ,    30, "%s" % CHAN[i]))
-    p.append(create_label(None, color, "/%s/gain_db"           % CHAN[i], i*INW+20, LY    , FW   ,    20, ""))
+    p.append(create_fader(None, color, "/mixer/%s/gain"        % CHAN[i], i*INW+20, 30    , FW   , SH-80))
+    p.append(create_label(None, color, "/mixer/%s/label"       % CHAN[i], i*INW+20,  0    , FW   ,    30, "%s" % CHAN[i]))
+    p.append(create_label(None, color, "/mixer/%s/gain_db"     % CHAN[i], i*INW+20, LY    , FW   ,    20, ""))
 
 color = "gray"
-p.append(create_fader(None, color, "/main/gain"                         , MAINX   , 30    , MAINW, SH-80))
-p.append(create_label(None, color, "/main/label"                        , MAINX   ,  0    , MAINW,    30, "Main"))
-p.append(create_label(None, color, "/main/gain_db"                      , MAINX   , LY    , MAINW,    20, ""))
+p.append(create_fader(None, color, "/mixer/main/gain"                   , MAINX   , 30    , MAINW, SH-80))
+p.append(create_label(None, color, "/mixer/main/label"                  , MAINX   ,  0    , MAINW,    30, "Main"))
+p.append(create_label(None, color, "/mixer/main/gain_db"                , MAINX   , LY    , MAINW,    20, ""))
 
 # ########################################
 # Page 1
 p = pages[1]
 
 LY = int((SH - 160) * 0.75) + 20
+AUXSS  = len(AUXS)
+AUXSW   = int((SW - MAINW - 30) / AUXSS)
+AUXW    = AUXSW - 20
 
 color = "red"
 for i in range(INS):
     if (i >= 8):
         color = "yellow"
-    p.append(create_fader(None, color, "/aux/%s"               % CHAN[i], i*INW+20, 30    , FW   , SH-160))
-    p.append(create_label(None, color, "/aux/%s_label"         % CHAN[i], i*INW+20,  0    , FW   ,     30, "%s" % CHAN[i]))
-    p.append(create_label(None, color, "/aux/%s_gain_db"       % CHAN[i], i*INW+20, LY    , FW   ,     20, ""))
+    p.append(create_fader(None, color, "/aux/%s/gain"          % CHAN[i], i*INW+20, 30    , FW, SH-160))
+    p.append(create_label(None, color, "/aux/%s/label"         % CHAN[i], i*INW+20,  0    , FW   ,     30, "%s" % CHAN[i]))
+    p.append(create_label(None, color, "/aux/%s/gain_db"       % CHAN[i], i*INW+20, LY    , FW   ,     20, ""))
 
 color = "gray"
 for i in range(len(AUXS)):
-    p.append(create_push (None, color, "/aux/sel/%s"           % AUXS[i], i*INW+20, SH-120, FW   ,     50))
-    p.append(create_label(None, color, "/aux/sel/%s_label"     % AUXS[i], i*INW+20, SH-120, FW   ,     50, "%s" % AUXS[i]))
+    p.append(create_push (None, color, "/aux/sel/%s"           % AUXS[i], i*AUXSW+20, SH-120, AUXW   ,     50))
+    p.append(create_label(None, color, "/aux/sel/%s_label"     % AUXS[i], i*AUXSW+20, SH-120, AUXW   ,     50, "%s" % AUXS[i]))
 
-p.append(create_fader(None, color, "/aux/gain"                          , MAINX   , 30    , MAINW, SH-160))
-p.append(create_label(None, color, "/aux/label"                         , MAINX   ,  0    , MAINW,     30, "Main"))
-p.append(create_label(None, color, "/aux/gain_db"                       , MAINX   , LY    , MAINW,     20, ""))
+p.append(create_fader(None, color, "/aux/main/gain"                     , MAINX   , 30    , MAINW, SH-160))
+p.append(create_label(None, color, "/aux/main/label"                    , MAINX   ,  0    , MAINW,     30, "Main"))
+p.append(create_label(None, color, "/aux/main/gain_db"                  , MAINX   , LY    , MAINW,     20, ""))
 
 # ########################################
 # Page 2
@@ -167,8 +171,12 @@ p.append(create_push  (None, color, "/transport/next"                    , 620, 
 p.append(create_label (None, color, "/transport/nextlabel"               , 620,  SH-280,  60,  60, ">>"))
 
 
-p.append(create_label (None, color, "/transport/filename"                , 420,  SH-120,  60,  60, "Filename"))
-p.append(create_label (None, color, "/transport/time"                    , 420,  SH-200, 200,  60, "00:00:00.0"))
+p.append(create_label (None, color, "/transport/filename"                , 420,  SH-120, 300,  60, "Filename"))
+p.append(create_label (None, color, "/transport/time"                    , 420,  SH-200, 200,  60, "00:00:00.0", 24))
+
+# ########################################
+# Page 4
+p = pages[4]
 
 p.append(create_toggle(None, color, "/transport/enableledbar"            ,  20,  SH-280,  60,  60))
 p.append(create_label (None, color, "/transport/enableledbarlabel"       ,  20,  SH-280,  60,  60, "LED"))
@@ -177,8 +185,8 @@ p.append(create_toggle(None, color, "/transport/enablegeq"               ,  20, 
 p.append(create_label (None, color, "/transport/enablegeqlabel"          ,  20,  SH-360,  60,  60, "GEQ"))
 
 # ########################################
-# Page 4
-p = pages[4]
+# Page 5
+p = pages[5]
 
 p.append(create_multifader(None, color, "/equalizer/main"                ,  20,  20,  SW-40,  SH-80, 31))
 

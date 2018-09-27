@@ -85,7 +85,7 @@ def create_toggle(name, color, ctrl, x, y, w, h, sf = 0.0, st = 1.1):
 	p.set("local_off", "false")
 	return p
 
-def create_label(name, color, ctrl, x, y, w, h, text = ""):
+def create_label(name, color, ctrl, x, y, w, h, text = "", size=18):
 	p = ET.Element("control")
 	p.set("name", b64(getname(name, "label")))
 	p.set("type", "labelv")
@@ -95,7 +95,7 @@ def create_label(name, color, ctrl, x, y, w, h, text = ""):
 	p.set("y", str(x))
 	p.set("w", str(h))
 	p.set("h", str(w))
-	p.set("size", "18")
+	p.set("size", str(size))
 	p.set("background", "false")
 	p.set("outline", "false")
 	if (ctrl != None):
