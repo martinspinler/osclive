@@ -27,6 +27,8 @@ class NullTransport():
 		pass
 	def playSkip(self, seconds):
 		pass
+	def playMove(self, pct):
+		pass
 
 	def recStart(self, filename):
 		pass
@@ -71,8 +73,9 @@ class Transport():
 		return self.status == 1
 
 	def playStart(self, filename):
-		if self.control != 0 or self.status != 0:
+		if self.control != 0 or self.status != 0 or not filename:
 			return
+
 		self.control = 2
 		self.currentTime = 0
 		self._playStart(filename)
@@ -91,6 +94,16 @@ class Transport():
 			posDiff = -currentPos
 
 		self.fplay.seek(posDiff, sf.SEEK_CUR)
+	def playMove(self, pct):
+		if not self.isPlaying():
+			return
+
+		if pct > 1:
+			pct = 1
+		elif pct < 0:
+			pct = 0
+
+		self.fplay.seek(int(pct * self.total), sf.SEEK_SET)
 
 	def _playStart(self, filename):
 		self.pq = queue.Queue(maxsize=self.buffersize)

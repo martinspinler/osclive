@@ -82,7 +82,7 @@ def create_toggle(name, color, ctrl, x, y, w, h, sf = 0.0, st = 1.1):
 	p.set("h", str(w))
 	p.set("scalef", str(sf))
 	p.set("scalet", str(st))
-	p.set("local_off", "false")
+	p.set("local_off", "true")
 	return p
 
 def create_label(name, color, ctrl, x, y, w, h, text = "", size=18):
@@ -102,7 +102,7 @@ def create_label(name, color, ctrl, x, y, w, h, text = "", size=18):
 		p.set("osc_cs", b64(ctrl))
 	return p
 
-def create_fader(name, color, ctrl, x, y, w, h, d = 'h'):
+def create_fader(name, color, ctrl, x, y, w, h, d = 'h', c = False):
 	p = ET.Element("control")
 	p.set("name", b64(getname(name, "fader")))
 	p.set("type", "fader%s"%d)
@@ -117,7 +117,7 @@ def create_fader(name, color, ctrl, x, y, w, h, d = 'h'):
 	p.set("size", "18")
 	p.set("response", "absolute")
 	p.set("inverted", "false")
-	p.set("centered", "false")
+	p.set("centered", "true" if c else "false")
 	return p
 
 def create_rotary(name, color, ctrl, x, y, w, h):
@@ -157,7 +157,7 @@ def create_multitoggle(name, color, ctrl, x, y, w, h, c):
 	p.set("local_off", "false")
 	return p
 
-def create_multifader(name, color, ctrl, x, y, w, h, c, d='h'):
+def create_multifader(name, color, ctrl, x, y, w, h, n, d='h', c=False):
 	p = ET.Element("control")
 	p.set("name", b64(getname(name, "toggle")))
 	p.set("type", "multifader%s" % d)
@@ -169,9 +169,9 @@ def create_multifader(name, color, ctrl, x, y, w, h, c, d='h'):
 	p.set("h", str(w))
 	p.set("scalef", "0.0")
 	p.set("scalet", "1.0")
-	p.set("number", str(c))
+	p.set("number", str(n))
 	p.set("inverted", "false")
-	p.set("centered", "false")
+	p.set("centered", "true" if c else "false")
 	return p
 
 def create_layout(width, height):

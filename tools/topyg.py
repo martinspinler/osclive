@@ -101,7 +101,7 @@ p.append(create_toggle(None, color, "/channel/gate"                     ,  X0   
 p.append(create_label (None, color, None                                ,  X0     , SH-140,      60,   60, "Pan"))
 p.append(create_label (None, color, None                                ,  X0     , SH-220,      60,   60, "HPF"))
 p.append(create_label (None, color, None                                ,  X0     , SH-300,      60,   60, "Gate"))
-p.append(create_fader (None, color, "/channel/pan"                      , 100     , SH-140, SW2-120,   60, 'v'))
+p.append(create_fader (None, color, "/channel/pan"                      , 100     , SH-140, SW2-120,   60, 'v', c=True))
 p.append(create_fader (None, color, "/channel/hpffreq"                  , 100     , SH-220, SW2-120,   60, 'v'))
 p.append(create_fader (None, color, "/channel/gatethresh"               , 100     , SH-300, SW2-120,   60, 'v'))
 
@@ -135,9 +135,9 @@ p.append(create_label (None, color, None                                , X1    
 p.append(create_label (None, color, None                                , X1      , SH-480,      60,   60, "HiQ"))
 p.append(create_label (None, color, None                                , X2      , SH-400,      60,   60, "High"))
 p.append(create_label (None, color, None                                , X2      , SH-480,      60,   60, "Shelf"))
-p.append(create_fader (None, color, "/channel/eqlowgain"                , X0+220  , SH-480,      60,  140))
-p.append(create_fader (None, color, "/channel/eqmidgain"                , X1+220  , SH-480,      60,  140))
-p.append(create_fader (None, color, "/channel/eqhighgain"               , X2+220  , SH-480,      60,  140))
+p.append(create_fader (None, color, "/channel/eqlowgain"                , X0+220  , SH-480,      60,  140, c = True))
+p.append(create_fader (None, color, "/channel/eqmidgain"                , X1+220  , SH-480,      60,  140, c = True))
+p.append(create_fader (None, color, "/channel/eqhighgain"               , X2+220  , SH-480,      60,  140, c = True))
 p.append(create_rotary(None, color, "/channel/eqlowfreq"                , X0+ 80  , SH-480,     120,  120))
 p.append(create_rotary(None, color, "/channel/eqmidfreq"                , X1+ 80  , SH-480,     120,  120))
 p.append(create_rotary(None, color, "/channel/eqhighfreq"               , X2+ 80  , SH-480,     120,  120))
@@ -170,25 +170,37 @@ p.append(create_label (None, color, "/transport/reclabel"                , 520, 
 p.append(create_push  (None, color, "/transport/next"                    , 620,  SH-280,  60,  60))
 p.append(create_label (None, color, "/transport/nextlabel"               , 620,  SH-280,  60,  60, ">>"))
 
+p.append(create_label (None, color, "/transport/filename"                , 320,  SH-120, 360,  60, "Filename"))
+p.append(create_label (None, color, "/transport/time"                    , 320,  SH-200, 360,  60, "00:00:00.0", 24))
 
-p.append(create_label (None, color, "/transport/filename"                , 420,  SH-120, 300,  60, "Filename"))
-p.append(create_label (None, color, "/transport/time"                    , 420,  SH-200, 200,  60, "00:00:00.0", 24))
+p.append(create_fader (None, color, "/transport/scrub"                   , 320,  SH-380, 360,  60, d = 'v'))
+
+for i in range(len(CHAN)):
+    p.append(create_toggle(None, "orange", "/channel/%s/firewire"    % CHAN[i], i*INW+20,  10   ,   FW   ,   60))
+    p.append(create_label(None, color, "/channel/%s/firewire_label" % CHAN[i], i*INW+20,  10   ,   FW   ,   60, "FW %s" %  CHAN[i]))
 
 # ########################################
 # Page 4
 p = pages[4]
 
-p.append(create_toggle(None, color, "/transport/enableledbar"            ,  20,  SH-280,  60,  60))
-p.append(create_label (None, color, "/transport/enableledbarlabel"       ,  20,  SH-280,  60,  60, "LED"))
+p.append(create_toggle(None, color, "/misc/enableledbar"            ,  20,  SH-280,  60,  60))
+p.append(create_label (None, color, "/misc/enableledbarlabel"       ,  20,  SH-280,  60,  60, "LED"))
 
-p.append(create_toggle(None, color, "/transport/enablegeq"               ,  20,  SH-360,  60,  60))
-p.append(create_label (None, color, "/transport/enablegeqlabel"          ,  20,  SH-360,  60,  60, "GEQ"))
+p.append(create_toggle(None, color, "/misc/enablegeq"               ,  20,  SH-360,  60,  60))
+p.append(create_label (None, color, "/misc/enablegeqlabel"          ,  20,  SH-360,  60,  60, "GEQ"))
+
+for i in range(len(CHAN)):
+    p.append(create_toggle(None, "red", "/channel/%s/mute"       % CHAN[i], i*INW+20,  10   ,   FW   ,   60))
+    p.append(create_label(None, color, "/channel/%s/mute_label" % CHAN[i], i*INW+20,  10   ,   FW   ,   60, "MT %s" %  CHAN[i]))
+
+    p.append(create_toggle(None, "yellow", "/channel/%s/solo"    % CHAN[i], i*INW+20,  90   ,   FW   ,   60))
+    p.append(create_label(None, color, "/channel/%s/solo_label" % CHAN[i], i*INW+20,  90   ,   FW   ,   60, "SL %s" %  CHAN[i]))
 
 # ########################################
 # Page 5
 p = pages[5]
 
-p.append(create_multifader(None, color, "/equalizer/main"                ,  20,  20,  SW-40,  SH-80, 31))
+p.append(create_multifader(None, color, "/equalizer/main"                ,  20,  20,  SW-40,  SH-80, 31, c = True))
 
 # ########################################
 # Finish

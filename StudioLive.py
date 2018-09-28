@@ -16,7 +16,7 @@ class StudioLive1602(SLRemote):
         "linkstereo":     54,
         "phantom":        60,
         "firewire":       61,
-        "phase":          61,
+        "phase":          62,
         "hpf":            80,
         "hpffreq":      3021,
         "gatethresh":   3041,

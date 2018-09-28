@@ -37,6 +37,19 @@ def osc_create_msg(addr, value):
     msg = msg.build()
     return msg
 
+def getNextFilename(filename, n=1):
+    d = os.path.dirname("recordings")
+    l = os.listdir("recordings")
+    if not l:
+        return None
+    if not filename or os.path.basename(filename) not in l:
+        return os.path.join("recordings", l[0])
+    i = l.index(os.path.basename(filename)) + n
+    if i < 0 or i >= len(l):
+        return filename
+    else:
+        return os.path.join("recordings", l[i])
+
 class OSCClient(udp_client.UDPClient):
     def __init__(self, ip, port, params):
         udp_client.UDPClient.__init__(self, ip, port)
@@ -118,6 +131,12 @@ class OSCClient(udp_client.UDPClient):
         self.dispatcher.map("/transport/play", self.transport_control_handler, "play")
         self.dispatcher.map("/transport/prev", self.transport_control_handler, "prev")
         self.dispatcher.map("/transport/next", self.transport_control_handler, "next")
+        self.dispatcher.map("/transport/scrub", self.transport_control_handler, "scrub")
+
+        # COMMON controllers
+        for i in channel_sel:
+            for ctrl in ["firewire", "solo", "mute"]:
+                self.dispatcher.map("/channel/%s/%s"%(i,ctrl), self.common_channel_handler, i, ctrl)
 
     def init(self):
         # PAGE "Main"
@@ -141,6 +160,11 @@ class OSCClient(udp_client.UDPClient):
         #for ch in channel_sel:
         #    if ch not in [i[0] for i in self.active_channels]:
         #        pass
+
+        for channel in channel_sel:
+            for ctrl in ["firewire", "solo", "mute"]:
+                value = self.server.get_control(channel, ctrl)
+                self.send(osc_create_msg("/channel/%s/%s" % (channel, ctrl), value))
 
     def sl_level_handler(self):
         for ch in range(1, CLIENT_CHANNELS+1):
@@ -178,7 +202,11 @@ class OSCClient(udp_client.UDPClient):
         #    val = self.server.get_control(channel_map["in%d"%i], self.selaux)
         #    self.send(osc_create_msg("/aux/gain%d" % i, val))
 
-        # PAGE "Effect"
+        # PAGE "Transport"
+        if ctrl in ["firewire", "solo", "mute"]:
+            print(channel, ctrl, value)
+            self.osc_send_control("/channel/%s/%s" % (channel, ctrl), value)
+
         # PAGE "Equaliser"
         if channel == "geq0":
             index = self.server.GEQ_CTRL[ctrl]
@@ -237,6 +265,9 @@ class OSCClient(udp_client.UDPClient):
         if (args[0] == "panreset"):
             self.server.set_control(self.selch, "pan", 0.5)
 
+    def common_channel_handler(self, addr, args, value):
+        self.server.set_control(args[0], args[1], value)
+
     def eq_handler(self, addr, args, value):
         # INFO: Universal Control fall when used
         #self.server.set_control("geq0", args[0], value)
@@ -256,18 +287,23 @@ class OSCClient(udp_client.UDPClient):
                 self.transport.playStop()
             else:
                 if not self.transportFilename:
-                        d = os.path.dirname("recordings")
-                        l = os.listdir("recordings")
-                        if l:
-                                self.transportFilename = os.path.join("recordings", l[0])
-                if not self.transportFilename:
-                        return
+                    self.transportFilename = getNextFilename(None)
 
                 self.transport.playStart(self.transportFilename)
         elif args[0] == "prev":
-            self.transport.playSkip(-1)
+            if self.transport.isPlaying():
+                self.transport.playSkip(-30)
+            else:
+                self.transportFilename = getNextFilename(self.transportFilename, -1)
+                self.send(osc_create_msg("/transport/filename", str(self.transportFilename)))
         elif args[0] == "next":
-            self.transport.playSkip(1)
+            if self.transport.isPlaying():
+                self.transport.playSkip(30)
+            else:
+                self.transportFilename = getNextFilename(self.transportFilename)
+                self.send(osc_create_msg("/transport/filename", str(self.transportFilename)))
+        elif args[0] == "scrub":
+            self.transport.playMove(value)
 
     def transportCallback(self):
         currentFrame = self.transport.currentTime / float(self.transport.samplerate)
@@ -280,15 +316,17 @@ class OSCClient(udp_client.UDPClient):
 
             self.transportTime = x
             self.send(osc_create_msg("/transport/time", str("%02d:%02d:%02d.%d" % (h,m,s,d))))
+            if self.transport.isPlaying():
+                self.send(osc_create_msg("/transport/scrub", self.transport.currentTime / float(self.transport.total)))
 
         if self.transport.isRecording() and self.transportStatus != 1:
                 self.transportStatus = 1
-                self.send(osc_create_msg("/transport/filename", self.transportFilename))
+                self.send(osc_create_msg("/transport/filename", str(self.transportFilename)))
                 self.send(osc_create_msg("/transport/rec/color", "red"))
                 self.send(osc_create_msg("/transport/rec", "Stop"))
         elif self.transport.isPlaying() and self.transportStatus != 2:
                 self.transportStatus = 2
-                self.send(osc_create_msg("/transport/filename", self.transportFilename))
+                self.send(osc_create_msg("/transport/filename", str(self.transportFilename)))
                 self.send(osc_create_msg("/transport/play/color", "green"))
                 self.send(osc_create_msg("/transport/play", "Stop"))
         elif not self.transport.isPlaying() and not self.transport.isRecording() and self.transportStatus != 0:
