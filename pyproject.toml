@@ -1,0 +1,21 @@
+[project]
+name = "osclive"
+description = "OSC server for PreSonus StudioLive"
+version = "0.1.0"
+authors = [
+    { name = "Martin Spinler", email = "martin.spinler@gmail.com" }
+]
+dependencies = [
+	"python-osc",
+    "netifaces",
+    "zeroconf"
+]
+
+[project.optional-dependencies]
+dev = [
+	"pyraw1394",
+	"yaml"
+]
+
+[project.scripts]
+osclive = "osclive.__main__:main"

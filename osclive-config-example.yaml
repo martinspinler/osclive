@@ -1,0 +1,21 @@
+studiolive:
+  input:
+    names:
+      ch1: "Ch 1"
+      ch2: "Ch 2"
+      ch3: "Ch 3"
+      ch4: "Ch 4"
+      ch5: "Ch 5"
+      ch6: "Ch 6"
+      ch7: "Ch 7"
+      ch8: "Ch 8"
+      ch9: "Ch 9/10"
+      ch10: "Ch 11/12"
+      ch11: "Ch 13/14"
+      ch12: "Ch 15/16"
+  aux:
+    names:
+      aux1: "Aux 1"
+      aux2: "Aux 2"
+      aux3: "Aux 3"
+      aux4: "Aux 4"
