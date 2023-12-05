@@ -45,3 +45,7 @@ You can generate layout for TouchOSC by script located in `tools/topyg.py`.
 The scripts needs just the [tosclib](https://github.com/AlbertoV5/tosclib) Python library.
 
 The *osclive* server broadcasts a Zeroconf service info, if your client doesn't support Zeroconf, use the TCP protocol with OSC 1.0 framing and port 4301.
+
+![Screenshot 1](https://github.com/martinspinler/osclive/releases/download/v0.1.0/osclive-touchosc-tab-channel.png)
+
+![Screenshot 2](https://github.com/martinspinler/osclive/releases/download/v0.1.0/osclive-touchosc-tab-sends.png)
