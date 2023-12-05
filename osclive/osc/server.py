@@ -14,20 +14,18 @@ from zeroconf import ServiceBrowser, ServiceInfo, Zeroconf
 
 class ThreadedTCPOSCRequestHandler(socketserver.BaseRequestHandler):
     def setup(self):
+        super().setup()
         print("OSC TCP client connected", self.client_address)
         self.server.clients.append(self)
 
     def _recv(self, size):
         data = b''
-        while len(data) != size: # and self.alive.is_set():
-            try:
-                data += self.request.recv(size - len(data))
-            except socket.timeout:
-                pass
-            except OSError:
+        while len(data) != size:
+            recv = self.request.recv(size - len(data))
+            if not recv:
                 return None
-
-        return data if len(data) == size else None
+            data += recv
+        return data
 
     def handle(self):
         while True:
@@ -43,8 +41,9 @@ class ThreadedTCPOSCRequestHandler(socketserver.BaseRequestHandler):
                 self.handle_message(m.message.address, m.message.params)
 
     def finish(self):
-        self.server.clients.remove(self)
         print("OSC TCP client disconnected", self.client_address)
+        self.server.clients.remove(self)
+        super().finish()
 
     def handle_message(self, address, params):
         pass
