@@ -47,6 +47,7 @@ def main():
         osc_srv.shutdown()
         for zc, si in zc_svcs:
             zc.close()
+        sl.disconnect()
 
 
 if __name__ == "__main__":
