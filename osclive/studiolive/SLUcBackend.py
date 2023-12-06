@@ -126,10 +126,10 @@ class SLUcBackend(SLBackend):
             pass
         elif category == 17:
             print("StudioLive: recv unknown category %s, message size %d" % (category, len(message_body)))
-            # Unknown
+            # New connected client?
             pass
         else:
-            if(self.debug):
+            if self.debug:
                 print("StudioLive: recv unknown category %s, message size %d" % (category, len(message_body)))
                 #print(message_body)
             pass
@@ -141,9 +141,7 @@ class SLUcBackend(SLBackend):
             self.update(message[:12], message[12:])
 
     def set_control(self, ch, control, value):
-        # TODO: TEST!!!!
         if ch.name == "geq0":
-        #if ch.info.name == "geq0":
             print("StudioLive: Upd control of channel %s is not supported" % ch)
             return
         header = struct.pack("IIHH", self.device.magic[0], self.device.magic[1], 2, self.device.magic[2])

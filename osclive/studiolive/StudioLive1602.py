@@ -181,6 +181,18 @@ SL1602CtrlsMasters_uc = {
     "monMain":        29,
     "monSolo":        30,
     "monFirewire":    31,
+    "solo_pfl_afl":   32,
+    "talkback":       35,
+    "tb_to_aux12":    36,
+    "tb_to_aux37":    37,
+    "srec_assigns":   64,
+    "srec_eqdyn":     65,
+    "srec_auxmix":    66,
+    "srec_faders":    67,
+    "srec_mute":      68,
+    "srec_fx":        69,
+    "srec_geq":       70,
+    "srec_pots":      70,
     "fxa->aux1":      72,
     "fxa->aux2":      73,
     "fxa->aux3":      74,
@@ -195,8 +207,10 @@ SL1602CtrlsFx_uc = {
     "param%d"%i: i for i in range(9)
 }
 
-SL1602CtrlsMixer_uc = {
-    "meters":           15019,
+SL1602CtrlsSlMixer_uc = {
+    "meters":                   15019,  # inputs, outputs, GR, locate
+    "link_channel_faders":      15031,
+    "default_to_fader_locate":  15032,
 }
 
 SL1602Channels_uc = {
@@ -211,8 +225,8 @@ SL1602Channels_uc = {
     # Misc channels
     "masters":      SLInputChannel("masters", SL1602CtrlsMasters_uc),
     **{"fx %s" % s: SLInputChannel("fx %s" % s, SL1602CtrlsFx_uc) for s in ["a", "b"]},
-#    "geq0":         SLInputChannel("geq0", SL1602CtrlsGeq_uc),
-    "slmixer":      SLInputChannel("slmixer", {}),
+    "geq0":         SLInputChannel("geq0", SL1602CtrlsGeq_uc),
+    "slmixer":      SLInputChannel("slmixer", SL1602CtrlsSlMixer_uc),
     "smaartwiz":    SLInputChannel("smaartwiz", {}),
 }
 
