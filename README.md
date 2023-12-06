@@ -16,6 +16,7 @@ Osclive implements two backends for communication with mixer:
 1. Universal Control client:
 
      Connects to the Universal Control application running on Windows or MacOS.
+     It is compatible with Universal Control version 1.7.6.
 
 2. Direct access to the mixer over FireWire
 
