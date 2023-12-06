@@ -26,6 +26,31 @@ dim.MAINX = dim.SW - dim.MAINW - 10
 dim._INW  = int((dim.SW - dim.MAINW - 30) / len(CHAN))
 dim.FW    = dim._INW - 20
 
+padding = 20
+margin = 20
+
+
+@dataclass
+class Frame:
+    x: int
+    y: int
+    w: int
+    h: int
+
+
+def pad(frame):
+    return resizeFrame(frame, x=padding, y=padding, w=-2*padding, h=-2*padding)
+
+def resizeFrame(frame, x = 0, y = 0, w = 0, h = 0):
+    return (frame[0] + x, frame[1] + y, frame[2] + w, frame[3] + h)
+
+def setFrame(frame, x = None, y = None, w = None, h = None):
+    return tuple(item if item != None else frame[i] for i,item in enumerate((x, y, w, h)))
+
+
+def md(**kwargs):
+    return kwargs
+
 colors = lambda x: x
 colors.ltblue = (0.0, 0xc4/255, 0xa8/255, 1.0)
 colors.white  = (1.0, 1.0, 1.0, 1.0)
@@ -45,21 +70,6 @@ geq_freqs = [
         "200", "250", "320", "400", "500", "640", "800", "1k", "1k3", "1k6",
         "2k", "2k5", "3k2", "4k", "5k", "6k4", "8k", "10k", "13k", "16k", "20k"]
 
-@dataclass
-class Frame:
-    x: int
-    y: int
-    w: int
-    h: int
-
-def md(**kwargs):
-    return kwargs
-
-def resizeFrame(frame, x = 0, y = 0, w = 0, h = 0):
-    return (frame[0] + x, frame[1] + y, frame[2] + w, frame[3] + h)
-
-def setFrame(frame, x = None, y = None, w = None, h = None):
-    return tuple(item if item != None else frame[i] for i,item in enumerate((x, y, w, h)))
 
 class ElementTOSC(tosc.ElementTOSC):
     script_float2db = f"""
@@ -78,17 +88,32 @@ function onReceiveOSC(msg, connections)
     self.values["text"] = float2db(args[1].value)
     return true
 end"""
+    script_float2db15 = f"""
+function float2db(val)
+    local ret = (val - 0.5) * 30
+    return string.format("%.1f dB", ret)
+end
+
+function onReceiveOSC(msg, connections)
+    local path = msg[1]
+    local args = msg[2]
+    local i
+    self.values["text"] = float2db(args[1].value)
+    return true
+end"""
 
     script_float2eq = """
 function onReceiveOSC(msg, connections)
     local val = msg[2][1].value
-    self.values["text"] = string.format("%.0f Hz", {a}*math.log(val+0.001) + {b})
+    local a = math.log({a})
+    local b = math.log({b}) - a
+    self.values["text"] = string.format("%.0f Hz", math.exp(b*val+a))
     return true
 end"""
 
-    script_float2eqlow = script_float2eq.format(a=69.6, b=333)
-    script_float2eqmid = script_float2eq.format(a=524, b=2500)
-    script_float2eqhigh= script_float2eq.format(a=2690, b=12885)
+    script_float2eqlow = script_float2eq.format(a=36, b=465)
+    script_float2eqmid = script_float2eq.format(a=260, b=3500)
+    script_float2eqhigh= script_float2eq.format(a=1400, b=18000)
 
     def __init__(self, parent):
         tosc.ElementTOSC.__init__(self, parent)
@@ -187,11 +212,6 @@ end"""
         for ch in names:
             self.createOSC(tosc.OSC(path=[tosc.Partial(type="CONSTANT", value=f"/channel/{ch}/label")]))
 
-padding = 20
-margin = 20
-
-def pad(frame):
-    return resizeFrame(frame, x=padding, y=padding, w=-2*padding, h=-2*padding)
 
 def createPageChannel(page, frame):
     p = pager_inputs = page.createElement(CT.PAGER, '', frame, md(tabbarSize=40, orientation=0))
@@ -296,7 +316,7 @@ def createPageChannel(page, frame):
                 l = eq.createElement(CT.LABEL, name + 'gain', (x2[i], 0, item2w, item2w), md(background=0))
                 l.createOSCDP()
                 # TODO: fix compute function
-                l.createProperty(pf.build("script", ElementTOSC.script_float2db))
+                l.createProperty(pf.build("script", ElementTOSC.script_float2db15))
 
 
             items = [
