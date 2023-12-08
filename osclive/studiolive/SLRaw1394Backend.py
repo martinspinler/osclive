@@ -128,6 +128,9 @@ class SLRaw1394Backend(SLBackend):
     def _write_fx(self, ch):
         self._write_data([0x6c] + ch.raw[2:-1], 0x10)
 
+    def _write_master(self, ch):
+        self._write_data([0x6f] + ch.raw[2:-1], 0x10)
+
     def _read_channel(self, ch):
         if type(ch.info) == SLInputChannel:
             return self._read_input_channel(ch)
@@ -148,6 +151,8 @@ class SLRaw1394Backend(SLBackend):
             self._write_geq(ch)
         elif type(ch.info) == SLFx:
             self._write_fx(ch)
+        elif type(ch.info) == SLMasters:
+            return self._write_master(ch)
         else:
             print("No write for channel:", ch)
 
