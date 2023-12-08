@@ -68,15 +68,17 @@ class SLRaw1394Backend(SLBackend):
         return rd
 
     def _transceive_msg(self, write_data, read_dwords):
-        assert read_dwords > 0 and len(write_data) > 0
+        assert len(write_data) > 0
 
         self.lock.acquire()
+        data = None
 
         try:
             if self.raw1394 == None:
                 raise SystemError("No raw1394, maybe StudioLive unexpectedly disconected?")
             self._send_msg(write_data)
-            data = self._recv_msg(read_dwords*4)
+            if read_dwords > 0:
+                data = self._recv_msg(read_dwords*4)
         finally:
             self.lock.release()
 
@@ -99,11 +101,24 @@ class SLRaw1394Backend(SLBackend):
             assert data[1] == status, "StudioLive: unexpected status for cmd %x: expected %x, got %x" % (cmd[0], status, data[1])
         assert data[2] == 0xF7, "StudioLive: no EOF byte for cmd %x" % (cmd[1])
 
+    def _write_raw(self, cmd):
+        cmd = [0xf0] + cmd + [0xf7]
+        self._transceive_msg(cmd, 0)
+        time.sleep(0.1)
+
     def _read_status(self):
         return self._read_data([0x38, 0x03], 47, 0x39)[:-1]
 
     def _read_faders(self):
         return self._read_data([0x6e], 0x0b*4, 0x6e)[2:-1]
+
+    def route_source_1516(self, main_mix=False):
+        if main_mix:
+             # Route main mix output to FireWire stream 15/16
+            self._write_raw([0x52, 0x13, 0x0e, 0x02, 0x00, 0x00, 0x00])
+        else:
+             # Route analog input 15/16 to FireWire stream 15/16
+            self._write_raw([0x52, 0x13, 0x0e, 0x00, 0x0e, 0x00, 0x00])
 
     def _read_input_channel(self, ch):
         data = self._read_data([0x6b, ch.info.index], 124, 0x6b)
