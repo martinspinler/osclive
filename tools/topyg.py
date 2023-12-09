@@ -425,6 +425,8 @@ def main():
         if initfn:
             initfn(page, resizeFrame(pager.getFrame(), h=-40))
 
+    lb = template.createLabeledButton((dim.SW-40, 0, 40, 40), 'connection_ping', "live", md(interactive=0, color=colors.green)).createOSCDP()
+
     tosc.write(root, args.output)
 
 

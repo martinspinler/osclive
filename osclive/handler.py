@@ -25,6 +25,8 @@ class SLClientHandler(DispatchedOSCRequestHandler):
 
         self.peaks = {ch: 0 for ch in self.all_channels}
 
+        self.connection_ping = 0
+
         self.sl.add_update_callback(self.sl_control_handler)
         self.sl.level_callbacks.append(self.sl_level_handler)
 
@@ -88,6 +90,13 @@ class SLClientHandler(DispatchedOSCRequestHandler):
                 self.send_message("/channel/%s/%s" % (ch, ctrl), value)
 
     def sl_level_handler(self):
+        self.connection_ping += 1
+        if self.connection_ping >= 16:
+            self.connection_ping = 0
+
+        if self.connection_ping % 8 == 0:
+            self.send_message("/connection_ping", self.connection_ping >= 8)
+
         for ch in self.inputs:
             value = self.sl.get_level(ch)
             if value == None:
