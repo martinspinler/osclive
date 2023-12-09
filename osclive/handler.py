@@ -90,23 +90,23 @@ class SLClientHandler(DispatchedOSCRequestHandler):
                 self.send_message("/channel/%s/%s" % (ch, ctrl), value)
 
     def sl_level_handler(self):
-        self.connection_ping += 1
-        if self.connection_ping >= 16:
-            self.connection_ping = 0
+        with self.bundle():
+            self.connection_ping += 1
+            if self.connection_ping >= 16:
+                self.connection_ping = 0
 
-        if self.connection_ping % 8 == 0:
-            self.send_message("/connection_ping", self.connection_ping >= 8)
+            if self.connection_ping % 8 == 0:
+                self.send_message("/connection_ping", self.connection_ping >= 8)
 
-        for ch in self.inputs:
-            value = self.sl.get_level(ch)
-            if value == None:
-                value = 0
-                #print(f"Channel {ch} doesn't have level")
-            value /= 32.0
+            for ch in self.inputs:
+                value = self.sl.get_level(ch)
+                if value == None:
+                    value = 0
+                value /= 32.0
 
-            if value > self.peaks[ch]:
-                self.peaks[ch] = value
-                self.send_message("/channel/%s/peak" % ch, value)
+                if value > self.peaks[ch]:
+                    self.peaks[ch] = value
+                    self.send_message("/channel/%s/peak" % ch, value)
 
     def sl_control_handler(self, channel, ctrl, value):
         #print("SL Control handler, channel %s, ctrl %s" %( channel, ctrl))
