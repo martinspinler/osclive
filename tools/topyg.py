@@ -373,8 +373,10 @@ def createPageMisc(p, frame):
         p.createLabeledButton((0, h-160), 'solo', 'Solo', md(buttonType=1, color=colors.yellow)).createOSCDP()
         p.createLabeledButton((0, h-80), 'mute', 'Mute', md(buttonType=1, color=colors.redsh)).createOSCDP()
 
-        e = p.createElement(CT.FADER, 'peak', (0, 20, 60, h-360), md(interactive=0, color=colors.white))
-        e.createOSCDP()
+        r = p.createElement(CT.RADIO, 'level', (10, 20, 40, h-360), md(interactive=0, color=colors.green, orientation=0, steps=16, radioType=1)).createOSCDP()
+
+        yellow_alpha = colors.yellow[0:3] + (0.5,)
+        e = p.createElement(CT.RADIO, 'peak',  (10, 20, 40, h-360), md(interactive=0, color=yellow_alpha, orientation=0, steps=16, background=0)).createOSCDP()
 
         args=[tosc.Partial(type="VALUE", conversion="STRING", value="text")]
         p.createElement(CT.LABEL, 'label', (0, h-20, 60, 20), md(background=0)).createOSCDP(arguments=args)

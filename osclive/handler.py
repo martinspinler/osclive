@@ -106,7 +106,9 @@ class SLClientHandler(DispatchedOSCRequestHandler):
 
                 if value > self.peaks[ch]:
                     self.peaks[ch] = value
-                    self.send_message("/channel/%s/peak" % ch, value)
+                    self.send_message("/channel/%s/peak" % ch, int(value * 16))
+
+                self.send_message("/channel/%s/level" % ch, int(value * 16))
 
     def sl_control_handler(self, channel, ctrl, value):
         #print("SL Control handler, channel %s, ctrl %s" %( channel, ctrl))
