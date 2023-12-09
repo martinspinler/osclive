@@ -107,7 +107,7 @@ class SLRaw1394Backend(SLBackend):
         time.sleep(0.1)
 
     def _read_status(self):
-        return self._read_data([0x38, 0x03], 47, 0x39)[:-1]
+        return self._read_data([0x38, 0x03], 47, 0x39)[:-2]
 
     def _read_faders(self):
         return self._read_data([0x6e], 0x0b*4, 0x6e)[2:-1]
@@ -177,10 +177,12 @@ class SLRaw1394Backend(SLBackend):
             if type(ch.info) == SLInputChannel:
                 # TODO: Max value?
                 if ch.info.stereo:
-                    ch.level = (levels[i], levels[i+1])
+                    if i + 1 < len(levels):
+                        ch.level = (levels[i], levels[i+1])
                     i += 2
                 else:
-                    ch.level = levels[i]
+                    if i < len(levels):
+                        ch.level = levels[i]
                     i += 1
         super()._update_levels()
 

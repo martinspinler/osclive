@@ -234,7 +234,7 @@ SL1602Channels_raw1394 = {
     **{"ch%d"  % (i+1): SLInputChannel(i, SL1602CtrlsIn_raw1394)        for i in range(8)},
     **{"ch%d"  % (i+1): SLInputChannel(i, SL1602CtrlsIn_raw1394, True)  for i in range(8, 12)},
     **{"aux%d" % (i+1): SLInputChannel(i+12, SL1602CtrlsIn_raw1394)     for i in range(4)},
-    "main":     SLInputChannel(16, SL1602CtrlsIn_raw1394),
+    "main":     SLInputChannel(16, SL1602CtrlsIn_raw1394, True),
     "fxa":      SLInputChannel(17, SL1602CtrlsIn_raw1394),
     "fxb":      SLInputChannel(18, SL1602CtrlsIn_raw1394),
     "geq0":     SLGeq(0, SL1602CtrlsGeq_raw1394),
