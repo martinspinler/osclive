@@ -397,6 +397,41 @@ def createPageEqualizer(p, frame):
     p.createLabeledButton((10, 10), 'enable', 'Enable', md(buttonType=1, color=colors.green)).createOSCDP()
     p.createLabeledButton((80, 10), 'reset', 'Reset', md(color=colors.redsh)).createOSCDP()
 
+def createTabPlayer(p, oc):
+    p.createTabProperties("Player", colors.yellow)
+    p.createLabeledButton((10, 10), 'play', 'Play', md(buttonType=1, color=colors.green)).createOSCDP(osc=oc)
+    f = p.createElement(CT.FADER, "seek", (80, 80, Frame(*p.getFrame()).w-20, 60), md(orientation=1, color=colors.red)).createOSCDP(osc=oc)
+
+def createPageMidibox(p, frame):
+    p.path = "/midibox"
+    oc = {"connections": "00010"}
+
+    layers = p.createElement(CT.PAGER, 'layers', frame, md(tabbarSize=40))
+
+    page = layers.createElement(CT.GROUP, "player", resizeFrame(layers.getFrame(), h=-40))
+    page.path = p.path
+    page.createTabProperties("Global", colors.yellow)
+    page.createLabeledButton((10, 10), 'enable', 'Enable', md(buttonType=1, color=colors.green)).createOSCDP(
+            arguments=[tosc.Partial(type="VALUE", conversion="BOOLEAN", value="x")], osc=oc)
+
+    page = layers.createElement(CT.GROUP, "player", resizeFrame(layers.getFrame(), h=-40))
+    page.path = "/player"
+    createTabPlayer(page, oc)
+
+    for index in range(8):
+        page = layers.createElement(CT.GROUP, f"{index}", None)
+        page.createTabProperties(f"{index}", colors.gray)
+        page.path = layers.path + f"/{index}"
+
+        args_bool = md(arguments=[tosc.Partial(type="VALUE", conversion="BOOLEAN", value="x")], osc=oc)
+        args_uint = md(arguments=[tosc.Partial(type="VALUE", conversion="INTEGER", value="x", scaleMin="0", scaleMax="127")], osc=oc)
+        args_sint = md(arguments=[tosc.Partial(type="VALUE", conversion="INTEGER", value="x", scaleMin="-64", scaleMax="63")], osc=oc)
+
+        page.createLabeledButton((10, 10), 'enabled', 'Enable', md(buttonType=1, color=colors.green)).createOSCDP(**args_bool)
+        page.createLabeledButton((10, 80), 'active', 'Active', md(buttonType=1, color=colors.green)).createOSCDP(**args_bool)
+
+        page.createLabeledFader(((1)*80, 80, 80, 300), "volume", "Volume", md(color=colors.red)).createOSCDP(**args_uint)
+        page.createLabeledFader(((2)*80, 80, 80, 300), "transposition", "Transposition", md(color=colors.red)).createOSCDP(**args_sint)
 
 def main():
     name = "StudioLive1602"
@@ -419,6 +454,7 @@ def main():
         ("aux",       "Sends", createPageAux),
         ("misc",      "Misc", createPageMisc),
         ("equalizer", "Equalizer", createPageEqualizer),
+        ("midibox",   "Midibox", createPageMidibox),
     ]
     for name, text, initfn in pages_cfg:
         page = pager.createElement(CT.GROUP, name, None)
