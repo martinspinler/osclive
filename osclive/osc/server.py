@@ -4,13 +4,13 @@ import threading
 
 import netifaces
 
-from typing import List, Tuple, Union, Any, Iterable
+from typing import Union, Iterable, List
 
 from pythonosc import osc_packet
 from pythonosc.osc_message_builder import OscMessageBuilder
 from pythonosc.osc_bundle_builder import OscBundleBuilder, IMMEDIATELY
 
-from zeroconf import ServiceBrowser, ServiceInfo, Zeroconf
+from zeroconf import ServiceInfo, Zeroconf
 
 
 class ThreadedTCPOSCRequestHandler(socketserver.BaseRequestHandler):
@@ -83,12 +83,14 @@ class ThreadedTCPOSCRequestHandler(socketserver.BaseRequestHandler):
 
     def send_message(self, address: str, value: Union[int, float, bytes, str, bool, tuple, list]) -> None:
         builder = OscMessageBuilder(address=address)
+        values: List
         if value is None:
             values = []
         elif not isinstance(value, Iterable) or isinstance(value, (str, bytes)):
             values = [value]
         else:
             values = value
+
         for val in values:
             builder.add_arg(val)
         msg = builder.build()
@@ -96,7 +98,7 @@ class ThreadedTCPOSCRequestHandler(socketserver.BaseRequestHandler):
         if self._bundle == None:
             try:
                 self.request.sendall(msg.size.to_bytes(length=4, byteorder='little') + msg._dgram)
-            except:
+            except Exception:
                 pass
         else:
             self._bundle.append(msg)
@@ -136,8 +138,12 @@ class SharedTCPServer():
 
     def shutdown(self):
         for c in self.server.clients:
-            c.request.shutdown(socket.SHUT_RDWR)
-            c.request.close()
+            try:
+                c.request.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            finally:
+                c.request.close()
         self.server.shutdown()
         self.server_thread.join()
 
