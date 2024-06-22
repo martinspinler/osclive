@@ -33,6 +33,12 @@ class SLClientHandler(DispatchedOSCRequestHandler):
         self.init_dispatcher()
         self.init()
 
+    def finish(self):
+        self.sl.remove_update_callback(self.sl_control_handler)
+        self.sl.level_callbacks.remove(self.sl_level_handler)
+
+        super().finish()
+
     def _get_freqs(self, ch):
         return [n for n in self.sl.channels[ch].ctrls if re.match(".*Hz$", n)]
 

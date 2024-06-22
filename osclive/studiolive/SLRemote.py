@@ -23,6 +23,9 @@ class SLRemote(object):
     def add_update_callback(self, callback):
         self.update_callbacks.append(callback)
 
+    def remove_update_callback(self, callback):
+        self.update_callbacks.remove(callback)
+
     def get_level(self, channel, stereo = False):
         assert channel in self.channels
         level = self.channels[channel].level
