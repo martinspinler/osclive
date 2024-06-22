@@ -28,9 +28,10 @@ class ThreadedTCPOSCRequestHandler(socketserver.BaseRequestHandler):
             self._rh._bundle_inner -= 1
             if self._rh._bundle_inner == 0:
                 if self._rh._bundle:
-                    self._rh.send_bundle(self._rh._bundle)
+                    bundle = self._rh._bundle
+                    self._rh._bundle = None
+                    self._rh.send_bundle(bundle)
 
-                self._rh._bundle = None
 
     def setup(self):
         super().setup()
@@ -56,7 +57,7 @@ class ThreadedTCPOSCRequestHandler(socketserver.BaseRequestHandler):
             if sz is None:
                 break
 
-            data = self._recv(int.from_bytes(sz, byteorder='little'))
+            data = self._recv(int.from_bytes(sz, byteorder='big'))
             if data is None:
                 break
 
@@ -79,7 +80,7 @@ class ThreadedTCPOSCRequestHandler(socketserver.BaseRequestHandler):
         for msg in msg_list:
             bb.add_content(msg)
         bundle = bb.build()
-        self.request.sendall(bundle.size.to_bytes(length=4, byteorder='little') + bundle.dgram)
+        self.request.sendall(bundle.size.to_bytes(length=4, byteorder='big') + bundle.dgram)
 
     def send_message(self, address: str, value: Union[int, float, bytes, str, bool, tuple, list]) -> None:
         builder = OscMessageBuilder(address=address)
@@ -97,7 +98,7 @@ class ThreadedTCPOSCRequestHandler(socketserver.BaseRequestHandler):
 
         if self._bundle == None:
             try:
-                self.request.sendall(msg.size.to_bytes(length=4, byteorder='little') + msg._dgram)
+                self.request.sendall(msg.size.to_bytes(length=4, byteorder='big') + msg._dgram)
             except Exception:
                 pass
         else:
