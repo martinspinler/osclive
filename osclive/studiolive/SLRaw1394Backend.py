@@ -288,7 +288,7 @@ class SLRaw1394Backend(SLBackend):
         self.raw1394 = None
         while not self.raw1394:
             try:
-                self.raw1394 = raw1394.raw1394()
+                self.raw1394 = raw1394.Raw1394()
                 self.init_data()
             except SystemError as ee:
                 print("Device not found, trying again in 5 secs...")

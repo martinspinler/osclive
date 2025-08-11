@@ -6,15 +6,15 @@ authors = [
     { name = "Martin Spinler", email = "martin.spinler@gmail.com" }
 ]
 dependencies = [
-	"python-osc",
+    "python-osc",
     "netifaces",
-    "zeroconf"
+    "zeroconf",
 ]
 
 [project.optional-dependencies]
 dev = [
-	"pyraw1394",
-	"yaml"
+    "raw1394@git+https://github.com/martinspinler/pyraw1394.git",
+    "pyyaml",
 ]
 
 [project.scripts]
