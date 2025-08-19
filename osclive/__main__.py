@@ -11,6 +11,7 @@ def main():
     argp.add_argument("-u", "--uc", help="Connect to the host running Universal Control application", metavar='HOST')
     argp.add_argument("-c", "--config", help="Load YAML configuration file", metavar='CFG')
     argp.add_argument("-d", "--debug", help="Print debug informations", action='store_true')
+    argp.add_argument("-m", "--midi", help="Use midi port instead of IEEE1394")
     args = argp.parse_args()
 
     if args.uc:
@@ -18,7 +19,7 @@ def main():
         slbackend = SLUcBackend(studiolive.StudioLive1602, args.uc)
     else:
         from .studiolive.SLRaw1394Backend import SLRaw1394Backend
-        slbackend = SLRaw1394Backend(studiolive.StudioLive1602)
+        slbackend = SLRaw1394Backend(studiolive.StudioLive1602, args.midi)
 
     slbackend.debug = args.debug
     sl = studiolive.SLRemote(slbackend, args.debug)

@@ -2,6 +2,7 @@ import threading
 import struct
 import time
 import raw1394
+import mido
 
 from dataclasses import dataclass
 from .SLBackend import *
@@ -29,12 +30,111 @@ def _set_bit_val(data, byte, bit, val):
 def _get_bit_val(data, byte, bit):
     return 1 if data[byte] & (1 << bit) else 0
 
+
+class AbstractAdapter():
+    def write(self, wd: list[int]):
+        raise NotImplementedError
+
+    def read(self, num_bytes: int) -> list[int]:
+        raise NotImplementedError
+
+
+class PortNotFoundError(SystemError):
+    pass
+
+
+class MidiAdapter(AbstractAdapter):
+    def __init__(self, name):
+        self._portout: mido.ports.BaseOutput
+        self._portin: mido.ports.BaseInput
+        self._port_name = name
+
+        def findSubstr(strings: list[str], substr: str) -> str:
+            for i in strings:
+                if substr in i:
+                    return i
+            raise PortNotFoundError(f'MIDI port {substr} not found in: ' + ", ".join(strings))
+        self._input_port_name = findSubstr(mido.get_input_names(), self._port_name)
+        self._output_port_name = findSubstr(mido.get_output_names(), self._port_name)
+
+        self._client_name = None
+        self._virtual = False
+
+        api = None
+
+        self._portout = mido.open_output(self._output_port_name, client_name=self._client_name, virtual=self._virtual, api=api)
+        self._portin = mido.open_input(self._input_port_name, client_name=self._client_name, virtual=self._virtual, api=api)
+
+        self._in_buffer = []
+        self._portin.callback = self._input_callback
+
+        self.write([0xf0, 0x33, 0xf7])
+        self._read(10)
+
+    def write(self, data: list[int]) -> None:
+        msg = mido.Message.from_bytes(bytes(data))
+        self._portout.send(msg)
+
+    def read(self, num_bytes: int) -> list[int]:
+        return self._read()
+
+    def _read(self, timeout: float = 2) -> list[int]:
+        tm = time.time() + timeout
+
+        while 0xF7 not in self._in_buffer:
+            if time.time() > tm:
+                raise SystemError()
+            time.sleep(0.01)
+
+        pos = self._in_buffer.index(0xf7)
+        b = self._in_buffer[:pos + 1]
+        self._in_buffer[:pos + 1] = []
+        return list(b)
+
+    def _input_callback(self, msg: mido.Message) -> None:
+        if msg.type == 'sysex':
+            self._in_buffer += [0xf0] + list(msg.data[:]) + [0xf7]
+
+
+class Raw1394Adapter(AbstractAdapter):
+    def __init__(self):
+        self._handle = raw1394.Raw1394()
+
+        # Clean internal data register (from previous communication)
+        retries = 0
+        while self._recv_msg(0x01, True)[0] != 0xfe and retries < 100:
+            retries += 1
+
+    def write(self, wd: list[int]):
+        if len(wd) % 4:
+            wd += [0xf7] * (4 - len(wd) % 4)
+        wa = 0xFFFFe0f00408
+        self._handle.write(wa, bytearray(wd))
+
+    def read(self, num_bytes: int) -> list[int]:
+        return self._recv_msg(num_bytes)
+
+    def _recv_msg(self, read_bytes, allow_fail = False):
+        aligned_bytes = int((read_bytes + 3) / 4) * 4
+        i = 0
+        ra = 0xFFFFe0f0091c
+        rd = list(self._handle.read(ra, aligned_bytes))
+        while rd[0] == 0xfe and not allow_fail and i < 20:
+            rd = list(self._handle.read(ra, aligned_bytes))
+            i += 1
+            time.sleep(0.002 if i < 8 else 0.1)
+        if i > 15:
+            assert False,"recv_msg - transfer error: 0xFE in the first byte (%d times)" % i
+        return rd
+
+
 class SLRaw1394Backend(SLBackend):
-    def __init__(self, device):
+    def __init__(self, device, midi=None):
         SLBackend.__init__(self, device.backends["raw1394"])
+        self._midi = midi
 
         self.lock = threading.Lock()
-        self.raw1394 = None
+        self._adapter= None
 
         for ch in self.channels.values():
             ch.raw = None
@@ -42,38 +142,18 @@ class SLRaw1394Backend(SLBackend):
         self.last_status = [0] * 0xc*4
         self.sel_channel = -1
 
-    def _send_msg(self, wd):
-        wa = 0xFFFFe0f00408
-        self.raw1394.write(wa, bytearray(wd))
-        #try:
-        #    self.raw1394.write(wa, bytearray(wd))
-        #except Exception as e:
-        #    print(e)
-
-    def _recv_msg(self, dwords, allow_fail = False):
-        i = 0
-        ra = 0xFFFFe0f0091c
-        rd = list(self.raw1394.read(ra, dwords))
-        while rd[0] == 0xfe and not allow_fail and i < 20:
-            rd = list(self.raw1394.read(ra, dwords))
-            i += 1
-            time.sleep(0.002 if i < 8 else 0.1)
-        if i > 15:
-            assert False,"recv_msg - transfer error: 0xFE in the first byte (%d times)" % i
-        return rd
-
-    def _transceive_msg(self, write_data, read_dwords):
+    def _transceive_msg(self, write_data: list[int], read_bytes: int):
         assert len(write_data) > 0
 
         self.lock.acquire()
         data = None
 
         try:
-            if self.raw1394 == None:
+            if self._adapter== None:
                 raise SystemError("No raw1394, maybe StudioLive unexpectedly disconected?")
-            self._send_msg(write_data)
-            if read_dwords > 0:
-                data = self._recv_msg(read_dwords*4)
+            self._adapter.write(write_data)
+            if read_bytes > 0:
+                data = self._adapter.read(read_bytes)
         finally:
             self.lock.release()
 
@@ -81,13 +161,11 @@ class SLRaw1394Backend(SLBackend):
 
     def _read_data(self, cmd, length, status = None):
         cmd = [0xf0] + cmd + [0xf7]
-        if len(cmd) % 4:
-            cmd += [0xf7] * (4 - len(cmd) % 4)
-        data = self._transceive_msg(cmd, int((length + 2 + 3) / 4))
+        data = self._transceive_msg(cmd, int((length + 2)))
         if status:
             assert data[1] == status, "StudioLive: unexpected status for cmd %x: expected %x, got %x" % (cmd[0], status, data[1])
-        assert data[length-1] == 0xF7, "StudioLive: no EOF byte for cmd %x" % (cmd[1])
-        return data[:length-1]
+        assert data[length+1] == 0xF7, "StudioLive: no EOF byte for cmd %x" % (cmd[1])
+        return data[:length+1]
 
     def _write_data(self, cmd, status = None):
         cmd = [0xf0] + cmd + [0xf7]
@@ -102,10 +180,10 @@ class SLRaw1394Backend(SLBackend):
         time.sleep(0.1)
 
     def _read_status(self):
-        return self._read_data([0x38, 0x03], 47, 0x39)[:-2]
+        return self._read_data([0x38, 0x03], 45, 0x39)[:-2]
 
     def _read_faders(self):
-        return self._read_data([0x6e], 0x0b*4, 0x6e)[2:-1]
+        return self._read_data([0x6e], 42, 0x6e)[2:-1]
 
     def route_source_1516(self, main_mix=False):
         if main_mix:
@@ -116,18 +194,18 @@ class SLRaw1394Backend(SLBackend):
             self._write_raw([0x52, 0x13, 0x0e, 0x00, 0x0e, 0x00, 0x00])
 
     def _read_input_channel(self, ch):
-        data = self._read_data([0x6b, ch.info.index], 124, 0x6b)
+        data = self._read_data([0x6b, ch.info.index], 122, 0x6b)
         assert data[2] == ch.info.index, "StudioLive: unexpected channel for cmd %x: expected %x, got %x" % (0x6b, ch, data[2])
         return data
 
     def _read_master(self):
-        return self._read_data([0x60], 60, 0x60)
+        return self._read_data([0x60], 58, 0x60)
 
     def _read_fx(self, ch):
-        return self._read_data([0x6d, 3, ch.info.index], 20, 0x6c)
+        return self._read_data([0x6d, 3, ch.info.index], 18, 0x6c)
 
     def _read_geq(self, ch):
-        return self._read_data([0x6d, 1, ch.info.index], 69, 0x6c)
+        return self._read_data([0x6d, 1, ch.info.index], 67, 0x6c)
 
     def _write_input_channel(self, ch):
         self._write_data([0x6a] + ch.raw[2:-1], 0x10)
@@ -245,11 +323,12 @@ class SLRaw1394Backend(SLBackend):
                 time.sleep(0.1)
 
             except SystemError as e:
-                self.raw1394 = None
+                self._adapter = None
                 print("SystemError, trying connect_hw:", e)
                 self.connect_hw()
             except Exception as e:
                 print("Exception:", e)
+                raise
 
     def set_control(self, ch, control, value):
         pos = ch.info.ctrls[control]
@@ -268,22 +347,25 @@ class SLRaw1394Backend(SLBackend):
 
     def connect(self):
         SLBackend.connect(self)
-        assert not self.raw1394
+        assert not self._adapter
 
         wait = True
         self.connect_hw()
 
-        if not self.raw1394:
+        if not self._adapter:
             raise SystemError("Device not found")
 
         self.update_thread = threading.Thread(target=self._update_process)
         self.update_thread.start()
 
     def connect_hw(self, wait = True):
-        self.raw1394 = None
-        while not self.raw1394:
+        self._adapter = None
+        while not self._adapter:
             try:
-                self.raw1394 = raw1394.Raw1394()
+                if self._midi:
+                    self._adapter = MidiAdapter(self._midi)
+                else:
+                    self._adapter = Raw1394Adapter()
                 self.init_data()
             except SystemError as ee:
                 print("Device not found, trying again in 5 secs...")
@@ -294,6 +376,7 @@ class SLRaw1394Backend(SLBackend):
             except:
                 import sys
                 print("Unexpected error:", sys.exc_info()[0])
+                raise
 
             if not wait:
                 break
@@ -301,11 +384,6 @@ class SLRaw1394Backend(SLBackend):
         print("StudioLive: connected")
 
     def init_data(self):
-        # Clean internal data register (from previous communication)
-        tries = 0
-        while self._recv_msg(0x01 * 4, True)[0] != 0xfe and tries < 100:
-            tries += 1
-
         # Read state of all channels
         for ch in self.channels.values():
             self._update_channel(ch, self._read_channel(ch))
