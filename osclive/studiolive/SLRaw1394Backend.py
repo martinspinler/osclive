@@ -3,6 +3,7 @@ import struct
 import time
 import raw1394
 import serial
+import mido
 import sys
 
 from dataclasses import dataclass
@@ -35,6 +36,46 @@ def _set_bit_val(data, byte, bit, val):
 
 def _get_bit_val(data, byte, bit):
     return 1 if data[byte] & (1 << bit) else 0
+
+
+class MidiReader():
+    def __init__(self, name):
+        self._output_port_name = name
+        self._input_port_name = self._output_port_name
+        self._client_name = None
+        self._virtual = False
+
+        print(mido.get_input_names())
+        api = None
+        self.portout = mido.open_output(self._output_port_name, client_name=self._client_name, virtual=self._virtual, api=api)
+        self.portin = mido.open_input(self._input_port_name, client_name=self._client_name, virtual=self._virtual, api=api)
+
+        self._in_buffer = []
+        self.portin.callback = self._input_callback
+
+    def write(self, data):
+        self.send(bytearray(data))
+
+    def send(self, b: bytes | list[int]) -> None:
+        if isinstance(b, list):
+            b = bytes(b)
+        msg = mido.Message.from_bytes(b)
+        print("W:", b)
+        self.portout.send(msg)
+
+    def read_until(self, x):
+        while 0xF7 not in self._in_buffer:
+            time.sleep(0.01)
+        b = self._in_buffer.copy()
+        self._in_buffer.clear()
+        return b
+
+    def _input_callback(self, msg: mido.Message) -> None:
+        self._midi_last_activity = time.time()
+
+        if msg.type == 'sysex':
+            self._in_buffer += [0xf0] + list(msg.data[:]) + [0xf7]
+
 
 class SLRaw1394Backend(SLBackend):
     def __init__(self, device, serial=None):
@@ -301,7 +342,7 @@ class SLRaw1394Backend(SLBackend):
         while not self.raw1394:
             try:
                 if self._serial:
-                    self.raw1394 = serial.Serial(self._serial, timeout=2.0)
+                    self.raw1394 = MidiReader(self._serial)
                 else:
                     self.raw1394 = raw1394.Raw1394()
                 self.init_data()
