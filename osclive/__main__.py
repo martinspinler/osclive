@@ -6,7 +6,8 @@ from . import studiolive
 from .osc import SharedTCPServer, zc_register_osc_tcp
 from .handler import SLClientHandler
 
-def main():
+
+def main() -> None:
     argp = argparse.ArgumentParser(prog='osclive', description='Python OSC server for remote control of the PreSonus StudioLive mixer')
     argp.add_argument("-u", "--uc", help="Connect to the host running Universal Control application", metavar='HOST')
     argp.add_argument("-c", "--config", help="Load YAML configuration file", metavar='CFG')
@@ -14,12 +15,13 @@ def main():
     argp.add_argument("-m", "--midi", help="Use midi port instead of IEEE1394")
     args = argp.parse_args()
 
+    slbackend: studiolive.SLBackend
     if args.uc:
         from .studiolive.ucbackend import SLUcBackend
-        slbackend = SLUcBackend(studiolive.StudioLive1602, args.uc)
+        slbackend = SLUcBackend(studiolive.StudioLive1602.uc, args.uc)
     else:
-        from .studiolive.rawbackend import SLRaw1394Backend
-        slbackend = SLRaw1394Backend(studiolive.StudioLive1602, args.midi)
+        from .studiolive.rawbackend import SLRawBackend
+        slbackend = SLRawBackend(studiolive.StudioLive1602.raw, args.midi)
 
     slbackend.debug = args.debug
     sl = studiolive.SLRemote(slbackend, args.debug)

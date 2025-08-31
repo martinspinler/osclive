@@ -1,95 +1,79 @@
 import threading
 
-from dataclasses import dataclass
-from typing import Union
+from dataclasses import dataclass, KW_ONLY
+from typing import Optional, Callable
+
+type SLValue = float
+
+type SLUpdateCallback = Callable[[str, str, SLValue], None]
+type SLLevelCallback = Callable[[], None]
+
 
 @dataclass
 class SLBaseChannel:
-    index: Union[int, str]
-    ctrls: dict
-
-@dataclass
-class SLInputChannel(SLBaseChannel):
-    stereo: bool = False
-
-@dataclass
-class SLGeq(SLBaseChannel):
     pass
 
-@dataclass
-class SLFx(SLBaseChannel):
-    pass
-
-@dataclass
-class SLMasters(SLBaseChannel):
-    pass
 
 @dataclass
 class SLChannel:
     name: str
-    info: Union[SLInputChannel, SLGeq, SLFx, SLMasters]
+    #info: SLBaseChannel
+    ctrls: dict[str, SLValue]
+    _: KW_ONLY
+    level: int | tuple[int, int] = 0
 
 
 @dataclass
 class SLType:
     pass
 
+
 @dataclass
 class SLTypeFloat(SLType):
     pass
+
 
 @dataclass
 class SLTypeGain(SLType):
     pass
 
+
 @dataclass
 class SLTypeInt(SLType):
     pass
 
-# raw1394
-@dataclass
-class SLNibblePair:
-    byte: int
-    dataType: SLType = SLTypeFloat
 
-@dataclass
-class SLBit:
-    byte: int
-    bit: int
+class SLListener():
+    update_callbacks: list[SLUpdateCallback] # Ch name, control, value
+    level_callbacks: list[SLLevelCallback]
 
 
 class SLBackend:
-    def __init__(self, device):
+    def __init__(self) -> None:
         self.debug = False
-        self.device = device
-        self.update_thread = None
+        self.update_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
-        self.channels = {n: SLChannel(n, i) for n,i in self.device.channels.items()}
+        self.channels: dict[str, SLChannel]
 
-        for ch in self.channels.values():
-            ch.ctrls = {n:None for n in ch.info.ctrls.keys()}
-            ch.level = None
-            ch.level = 0
-
-    def set_listener(self, listener):
+    def set_listener(self, listener: SLListener) -> None:
         self.listener = listener
 
-    def connect(self):
+    def connect(self) -> None:
         pass
 
-    def disconnect(self):
+    def disconnect(self) -> None:
         self._stop_event.set()
         if self.update_thread:
             self.update_thread.join()
 
-    def _update_levels(self):
+    def _update_levels(self) -> None:
         for callback in self.listener.level_callbacks:
             callback()
 
-    def set_control(self, ch, control, value):
+    def set_control(self, ch: SLChannel, control: str, value: SLValue) -> None:
         pass
 
-    def _update_control(self, ch, control, value):
+    def _update_control(self, ch: SLChannel, control: str, value: SLValue) -> bool:
         if ch.ctrls[control] != value:
             ch.ctrls[control] = value
             if self.debug:
@@ -99,3 +83,7 @@ class SLBackend:
             return True
         else:
             return False
+
+
+class StudioLiveDevice:
+    pass

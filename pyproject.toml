@@ -21,3 +21,7 @@ dev = [
 
 [project.scripts]
 osclive = "osclive.__main__:main"
+
+[[tool.mypy.overrides]]
+module = "mido,raw1394"
+ignore_missing_imports = true

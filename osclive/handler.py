@@ -1,18 +1,20 @@
-import math
 import re
 
-from .studiolive.studiolive1602 import SL1602CtrlsIn_raw1394
+from typing import Any
 
-from .osc.server import DispatchedOSCRequestHandler
+from .studiolive import SLRemote
+
+from .osc.server import DispatchedOSCRequestHandler, OscValue
+
 
 class SLClientHandler(DispatchedOSCRequestHandler):
     # Must be set!
-    sl = None
+    sl: SLRemote
 
-    input_names = {}
-    aux_names = {}
+    input_names: dict[str, str] = {}
+    aux_names: dict[str, str] = {}
 
-    def setup(self):
+    def setup(self) -> None:
         super().setup()
 
         channels = self.sl.channels
@@ -23,7 +25,7 @@ class SLClientHandler(DispatchedOSCRequestHandler):
         self.fxs = [n for n in channels if re.match("^fx[a-z]", n)]
         self.all_channels = self.inputs + self.auxs + self.fxs + ["main"]
 
-        self.peaks = {ch: 0 for ch in self.all_channels}
+        self.peaks: dict[str, float] = {ch: 0 for ch in self.all_channels}
 
         self.connection_ping = 0
 
@@ -33,16 +35,16 @@ class SLClientHandler(DispatchedOSCRequestHandler):
         self.init_dispatcher()
         self.init()
 
-    def finish(self):
+    def finish(self) -> None:
         self.sl.remove_update_callback(self.sl_control_handler)
         self.sl.level_callbacks.remove(self.sl_level_handler)
 
         super().finish()
 
-    def _get_freqs(self, ch):
+    def _get_freqs(self, ch: str) -> list[str]:
         return [n for n in self.sl.channels[ch].ctrls if re.match(".*Hz$", n)]
 
-    def init_dispatcher(self):
+    def init_dispatcher(self) -> None:
         for channel in self.all_channels:
             for control in self.channel_ctrls:
                 self.map(f"/channel/{channel}/{control}", self.channel_control_handler, channel, control)
@@ -64,14 +66,17 @@ class SLClientHandler(DispatchedOSCRequestHandler):
         #    for ctrl in ["param%d"%i for i in range(6)]:
         #        self.map("/fx/%s"%(ctrl), self.common_channel_handler, i, ctrl)
 
-        self.map("/init", lambda addr: self.init())
+        self.map("/init", self._init)
 
-    def init(self):
+    def _init(self, addr: str) -> None:
+        self.init()
+
+    def init(self) -> None:
         all_channels = self.inputs + self.auxs + self.fxs + ["main"]
         for ch in all_channels:
             for ctrl in self.channel_ctrls:
                 value = self.sl.get_control(ch, ctrl)
-                if value == None:
+                if value is None:
                     self.send_message("/channel/%s/%s" % (ch, ctrl), 0)
                 else:
                     self.send_message("/channel/%s/%s" % (ch, ctrl), value)
@@ -86,16 +91,16 @@ class SLClientHandler(DispatchedOSCRequestHandler):
 
         ch = "geq0"
         if ch in self.sl.channels:
-            l = list(self.sl.channels[ch].ctrls.keys())
-            index = l.index("20Hz")
+            f = list(self.sl.channels[ch].ctrls.keys())
+            index = f.index("20Hz")
             for i in range(index, index + 31):
-                value = self.sl.get_control(ch, l[i])
+                value = self.sl.get_control(ch, f[i])
                 self.send_message("/channel/%s/%d" % (ch, i - index + 1), value)
             for ctrl in ["enable"]:
                 value = self.sl.get_control(ch, ctrl)
                 self.send_message("/channel/%s/%s" % (ch, ctrl), value)
 
-    def sl_level_handler(self):
+    def sl_level_handler(self) -> None:
         with self.bundle():
             self.connection_ping += 1
             if self.connection_ping >= 16:
@@ -105,9 +110,14 @@ class SLClientHandler(DispatchedOSCRequestHandler):
                 self.send_message("/connection_ping", self.connection_ping >= 8)
 
             for ch in self.inputs:
-                value = self.sl.get_level(ch)
-                if value == None:
+                v = self.sl.get_level(ch)
+                value: float
+                if v is None:
                     value = 0
+                elif isinstance(v, tuple):
+                    value = v[0]
+                else:
+                    value = v
                 value /= 32.0
 
                 if value > self.peaks[ch]:
@@ -116,7 +126,7 @@ class SLClientHandler(DispatchedOSCRequestHandler):
 
                 self.send_message("/channel/%s/level" % ch, int(value * 16))
 
-    def sl_control_handler(self, channel, ctrl, value):
+    def sl_control_handler(self, channel: str, ctrl: str, value: float) -> None:
         #print("SL Control handler, channel %s, ctrl %s" %( channel, ctrl))
         all_channels = self.inputs + self.auxs + self.fxs + ["main"]
         if channel in all_channels:
@@ -124,8 +134,8 @@ class SLClientHandler(DispatchedOSCRequestHandler):
 
 #        # PAGE "Equalizer"
         if channel == "geq0":
-            l = list(self.sl.channels["geq0"].ctrls.keys())
-            index = l.index(ctrl) - l.index("20Hz")
+            f = list(self.sl.channels["geq0"].ctrls.keys())
+            index = f.index(ctrl) - f.index("20Hz")
 
             if index <= 31:
                 self.send_message("/channel/%s/%d" % (channel, index + 1), value)
@@ -135,11 +145,11 @@ class SLClientHandler(DispatchedOSCRequestHandler):
 #        if channel == "fx0":
 #            self.send_message("/fx/%s" % ctrl, value)
 
-    def channel_control_handler(self, addr, args, value):
+    def channel_control_handler(self, addr: str, args: list[Any], value: float) -> None:
         ch, ctrl = args[:2]
         self.sl.set_control(ch, ctrl, value)
 
-    def channel_control_extra_handler(self, addr, args, value):
+    def channel_control_extra_handler(self, addr: str, args: list[Any], value: OscValue) -> None:
         ch, ctrl = args[:2]
         if ctrl == "panreset":
             self.sl.set_control(ch, "pan", 0.5)

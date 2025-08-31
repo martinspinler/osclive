@@ -1,21 +1,32 @@
 import time
 import threading
 import struct
-from socket import *
+from typing import Optional
 
-from .backend import SLBackend
+from socket import socket, AF_INET, SOCK_STREAM
 
-def SLparsestr(s, n=None):
+from .backend import SLBackend, SLChannel, SLValue
+from .uc import UCChannel, UCStudioLiveDevice
+
+
+def SLparsestr(s: bytes, n: Optional[int] = None) -> str:
     assert b'\x00' in s
     if n is not None:
         assert len(s) == n
     return (s[:s.find(b'\x00')]).decode()
 
+
 # UniversalControl backend: based on https://github.com/jeffkaufman/vsl1818
 class SLUcBackend(SLBackend):
+    def __init__(self, device: type[UCStudioLiveDevice], host: str, port: Optional[int] = None, name: str = "SL-Remote", ident: str = "1BE8DC6BF62EA577B") -> None:
+        super().__init__()
+        self.device = device
+        #SLBackend.__init__(self, device.backends["uc"])
 
-    def __init__(self, device, host, port = None, name = "SL-Remote", ident = "1BE8DC6BF62EA577B"):
-        SLBackend.__init__(self, device.backends["uc"])
+        #channels: dict[str, UCChannel] = {n: UCChannel(n, {n: None for n in i.ctrls.keys()}, i) for n, i in self.device.channels.items()}
+        #self.channels = channels
+        self.channels = {n: UCChannel(n, {n: 0 for n in i.ctrls.keys()}, i) for n, i in self.device.channels.items()}
+        channels: dict[str, UCChannel] = self.channels # type: ignore
 
         self.host = host
         self.port = port if port else self.device.port
@@ -23,35 +34,38 @@ class SLUcBackend(SLBackend):
         self.name = name
 
         self._connect_event = threading.Event()
-        self.connection = None
+        self.connection: Optional[socket] = None
 
-        self._channel_int = {i.info.index: i for i in self.channels.values()}
-        for ch in self.channels.values():
-            ch.info._control_rev = {i:n for n,i in ch.info.ctrls.items()}
+        self._channel_int = {i.info.name: i for i in channels.values()}
+        #self._control_rev: dict[str, dict[str, Control]]
+        for ch in channels.values():
+            ch.info._control_rev = {i: n for n, i in ch.info.ctrls.items()}
 
     # Low-level send & receive functions
-    def recv(self, n):
+    def recv(self, n: int) -> bytes:
         if not self.connection:
-            return ""
+            return b""
         s = b""
-        def remaining():
-            return n-len(s)
+
+        def remaining() -> int:
+            return n - len(s)
+
         while remaining() > 0:
             s += self.connection.recv(remaining())
         return s
 
-    def readmsg(self):
-        signature, l = struct.unpack("II", self.recv(8))
+    def readmsg(self) -> bytes:
+        signature, size = struct.unpack("II", self.recv(8))
         assert signature == 0xaa550011
-        return self.recv(l)
+        return self.recv(size)
 
-    def sendmsg(self, message):
+    def sendmsg(self, message: bytes) -> None:
         if not self.connection:
             return
         self.connection.send(struct.pack("II", 0xaa550011, len(message)) + message)
 
     # Main functions
-    def connect(self):
+    def connect(self) -> None:
         assert not self.connection
         if not self.host:
             return
@@ -67,7 +81,7 @@ class SLUcBackend(SLBackend):
         while not self._connect_event.is_set():
             time.sleep(0.1)
 
-    def update(self, message_header, message_body):
+    def update(self, message_header: bytes, message_body: bytes) -> None:
         unknown1, unknown2, category, unknown3 = struct.unpack("IIHH", message_header)
         assert unknown1 == self.device.magic[0]
         assert unknown2 == self.device.magic[1]
@@ -79,6 +93,7 @@ class SLUcBackend(SLBackend):
 
             i = 0
             for ch in self.channels.values():
+                assert isinstance(ch, UCChannel)
                 if ch.info.stereo:
                     ch.level = (levels[i], levels[i+1])
                     i += 2
@@ -99,12 +114,12 @@ class SLUcBackend(SLBackend):
         elif category == 2:
             control_id, value, channel_id = struct.unpack("=Hd32s", message_body)
             channel_id = SLparsestr(channel_id)
-            if(channel_id not in self._channel_int):
+            if channel_id not in self._channel_int:
                 print("StudioLive: recv control update for unknown channel %s" % channel_id)
                 return
 
             channel = self._channel_int[channel_id]
-            if(control_id not in channel.info._control_rev):
+            if control_id not in channel.info._control_rev:
                 print("StudioLive: recv unknown control update %d for channel %s with value %.2f" % (control_id, channel.name, value))
                 return
 
@@ -134,16 +149,17 @@ class SLUcBackend(SLBackend):
                 #print(message_body)
             pass
 
-    def update_process(self):
+    def update_process(self) -> None:
         assert self.connection
         while not self._stop_event.is_set():
             message = self.readmsg()
             self.update(message[:12], message[12:])
 
-    def set_control(self, ch, control, value):
+    def set_control(self, ch: SLChannel, control: str, value: SLValue) -> None:
+        assert isinstance(ch, UCChannel)
         if ch.name == "geq0":
             print("StudioLive: Upd control of channel %s is not supported" % ch)
             return
         header = struct.pack("IIHH", self.device.magic[0], self.device.magic[1], 2, self.device.magic[2])
-        body = struct.pack("=Hd32s", ch.info.ctrls[control], value, ch.info.index.encode())
+        body = struct.pack("=Hd32s", ch.info.ctrls[control], value, ch.info.name.encode())
         self.sendmsg(header + body)
