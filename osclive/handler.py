@@ -1,7 +1,7 @@
 import math
 import re
 
-from .studiolive.StudioLive1602 import SL1602CtrlsIn_raw1394
+from .studiolive.studiolive1602 import SL1602CtrlsIn_raw1394
 
 from .osc.server import DispatchedOSCRequestHandler
 

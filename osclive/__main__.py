@@ -15,10 +15,10 @@ def main():
     args = argp.parse_args()
 
     if args.uc:
-        from .studiolive.SLUcBackend import SLUcBackend
+        from .studiolive.ucbackend import SLUcBackend
         slbackend = SLUcBackend(studiolive.StudioLive1602, args.uc)
     else:
-        from .studiolive.SLRaw1394Backend import SLRaw1394Backend
+        from .studiolive.rawbackend import SLRaw1394Backend
         slbackend = SLRaw1394Backend(studiolive.StudioLive1602, args.midi)
 
     slbackend.debug = args.debug

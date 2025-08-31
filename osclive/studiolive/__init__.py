@@ -1,2 +1,2 @@
-from .SLRemote import SLRemote
-from .StudioLive1602 import StudioLive1602
+from .remote import SLRemote
+from .studiolive1602 import StudioLive1602
