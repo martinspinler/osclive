@@ -5,8 +5,8 @@ import raw1394
 import mido
 
 from dataclasses import dataclass
-from .SLBackend import *
 
+from .backend import *
 
 def _val_from_nibble_pair(data, dataType):
     value = (data[0] << 4 | data[1])# / 256

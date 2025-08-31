@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
-from .SLBackend import *
+from .backend import *
+
 
 SL1602EqFreqs = [
     "20Hz",

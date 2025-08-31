@@ -2,6 +2,7 @@ import threading
 import struct
 import time
 
+
 class SLRemote(object):
     def __init__(self, backend, debug = False):
         self.backend = backend

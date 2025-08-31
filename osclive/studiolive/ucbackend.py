@@ -3,7 +3,7 @@ import threading
 import struct
 from socket import *
 
-from .SLBackend import SLBackend
+from .backend import SLBackend
 
 def SLparsestr(s, n=None):
     assert b'\x00' in s
