@@ -1,6 +1,11 @@
+from typing import Union
 from dataclasses import dataclass
 
-from .backend import *
+from .backend import SLTypeInt, SLTypeGain, StudioLiveDevice
+#from .backend import SLInputChannel, SLGeq, SLFx, SLMasters
+
+from .uc import UCStudioLiveDevice, UCInputChannel
+from .raw import SLNibblePair, SLBit, RawInputChannel, RawGeq, RawFx, RawMasters, RawStudioLiveDevice
 
 
 SL1602EqFreqs = [
@@ -37,7 +42,10 @@ SL1602EqFreqs = [
     "20kHz",
 ]
 
-SL1602CtrlsIn_raw1394 = {
+type RawControlDict = dict[str, Union[SLNibblePair, SLBit]]
+type UCControlDict = dict[str, int]
+
+SL1602CtrlsIn_raw1394: RawControlDict = {
     "gain":             SLNibblePair(3, SLTypeGain),
     "pan":              SLNibblePair(5),
     "linkedpan":        SLNibblePair(7),
@@ -82,40 +90,40 @@ SL1602CtrlsIn_raw1394 = {
     "toMain":           SLBit(113, 3)
 }
 
-SL1602CtrlsGeq_raw1394 = {
+SL1602CtrlsGeq_raw1394: RawControlDict = {
     "enable":          SLBit(4, 0),
     **{s: SLNibblePair(i*2 + 5) for s, i in zip(SL1602EqFreqs, range(len(SL1602EqFreqs)))},
 }
 
-SL1602CtrlsFx_raw1394 = {
+SL1602CtrlsFx_raw1394: RawControlDict = {
     "fxtype":         SLNibblePair(5, SLTypeInt),
     **{"param%d" % i: SLNibblePair(i*2+7) for i in range(6)}
 }
 
-SL1602CtrlsMasters_raw1394 = {
-    "monLevelMain":   SLNibblePair(26),
-    "monLevelPhones": SLNibblePair(36),
-    "fxagain":        SLNibblePair(32, SLTypeGain),
-    "fxbgain":        SLNibblePair(34, SLTypeGain),
-    "monLevelSolo":   SLNibblePair(28),
-    "monMain":        SLBit(47, 1),
-    "monSolo":        SLBit(47, 2),
-    "monFirewire":    SLBit(47, 3),
-    "soloPFL":        SLBit(46, 0),
-    "talkback":       SLBit(46, 3),
-    "talkback->aux12":SLBit(45, 0),
-    "talkback->aux34":SLBit(45, 1),
-    "fxa->aux1":      SLBit(52, 0),
-    "fxa->aux2":      SLBit(52, 1),
-    "fxa->aux3":      SLBit(52, 2),
-    "fxa->aux4":      SLBit(52, 3),
-    "fxb->aux1":      SLBit(50, 0),
-    "fxb->aux2":      SLBit(50, 1),
-    "fxb->aux3":      SLBit(51, 2),
-    "fxb->aux4":      SLBit(51, 3),
+SL1602CtrlsMasters_raw1394: RawControlDict = {
+    "monLevelMain":       SLNibblePair(26),
+    "monLevelPhones":     SLNibblePair(36),
+    "fxagain":            SLNibblePair(32, SLTypeGain),
+    "fxbgain":            SLNibblePair(34, SLTypeGain),
+    "monLevelSolo":       SLNibblePair(28),
+    "monMain":            SLBit(47, 1),
+    "monSolo":            SLBit(47, 2),
+    "monFirewire":        SLBit(47, 3),
+    "soloPFL":            SLBit(46, 0),
+    "talkback":           SLBit(46, 3),
+    "talkback->aux12":    SLBit(45, 0),
+    "talkback->aux34":    SLBit(45, 1),
+    "fxa->aux1":          SLBit(52, 0),
+    "fxa->aux2":          SLBit(52, 1),
+    "fxa->aux3":          SLBit(52, 2),
+    "fxa->aux4":          SLBit(52, 3),
+    "fxb->aux1":          SLBit(50, 0),
+    "fxb->aux2":          SLBit(50, 1),
+    "fxb->aux3":          SLBit(51, 2),
+    "fxb->aux4":          SLBit(51, 3),
 }
 
-SL1602CtrlsIn_uc = {
+SL1602CtrlsIn_uc: UCControlDict = {
     "gain":            0,
     "pan":             1,
     "aux1":            3,
@@ -167,13 +175,13 @@ SL1602CtrlsIn_uc = {
     "Unknown6":     3078,
 }
 
-SL1602CtrlsGeq_uc = {
+SL1602CtrlsGeq_uc: UCControlDict = {
     "enable":          0,
     **{s: i+1 for s, i in zip(SL1602EqFreqs, range(len(SL1602EqFreqs)))},
-#   "unknown":        32,
+    #"unknown":        32,
 }
 
-SL1602CtrlsMasters_uc = {
+SL1602CtrlsMasters_uc: UCControlDict = {
     "monLevelMain":   12,
     "monLevelPhones": 13,
     "fxagain":        15,
@@ -204,11 +212,11 @@ SL1602CtrlsMasters_uc = {
     "fxb->aux4":      81,
 }
 
-SL1602CtrlsFx_uc = {
-    "param%d"%i: i for i in range(9)
+SL1602CtrlsFx_uc: UCControlDict = {
+    "param%d" % i: i for i in range(9)
 }
 
-SL1602CtrlsSlMixer_uc = {
+SL1602CtrlsSlMixer_uc: UCControlDict = {
     "meters":                   15019,  # inputs, outputs, GR, locate
     "link_channel_faders":      15031,
     "default_to_fader_locate":  15032,
@@ -216,50 +224,56 @@ SL1602CtrlsSlMixer_uc = {
 
 SL1602Channels_uc = {
     # Main channels
-    **{"ch%d"  % (i+1): SLInputChannel("in%d,0"%(i), SL1602CtrlsIn_uc)        for i in range(8)},
-    **{"ch%d"  % (i+1): SLInputChannel("in%d,0"%(i), SL1602CtrlsIn_uc, True)  for i in range(8, 12)},
-    **{"aux%d" % (i+1): SLInputChannel("in%d,0"%(i+12), SL1602CtrlsIn_uc)     for i in range(4)},
-    "main": SLInputChannel("in16,0", SL1602CtrlsIn_uc),
-    "fxa": SLInputChannel("in17,0", SL1602CtrlsIn_uc),
-    "fxb": SLInputChannel("in18,0", SL1602CtrlsIn_uc),
+    **{"ch%d"  % (i+1): UCInputChannel("in%d,0" % (i), SL1602CtrlsIn_uc,         False) for i in range(8)},
+    **{"ch%d"  % (i+1): UCInputChannel("in%d,0" % (i), SL1602CtrlsIn_uc,          True) for i in range(8, 12)},
+    **{"aux%d" % (i+1): UCInputChannel("in%d,0" % (i+12), SL1602CtrlsIn_uc,      False) for i in range(4)},
+    "main": UCInputChannel("in16,0", SL1602CtrlsIn_uc),
+    "fxa": UCInputChannel("in17,0", SL1602CtrlsIn_uc),
+    "fxb": UCInputChannel("in18,0", SL1602CtrlsIn_uc),
 
     # Misc channels
-    "masters":      SLInputChannel("masters", SL1602CtrlsMasters_uc),
-    **{"fx %s" % s: SLInputChannel("fx %s" % s, SL1602CtrlsFx_uc) for s in ["a", "b"]},
-    "geq0":         SLInputChannel("geq0", SL1602CtrlsGeq_uc),
-    "slmixer":      SLInputChannel("slmixer", SL1602CtrlsSlMixer_uc),
-    "smaartwiz":    SLInputChannel("smaartwiz", {}),
+    "masters":      UCInputChannel("masters", SL1602CtrlsMasters_uc),
+    **{"fx %s" % s: UCInputChannel("fx %s" % s, SL1602CtrlsFx_uc) for s in ["a", "b"]},
+    "geq0":         UCInputChannel("geq0", SL1602CtrlsGeq_uc),
+    "slmixer":      UCInputChannel("slmixer", SL1602CtrlsSlMixer_uc),
+    "smaartwiz":    UCInputChannel("smaartwiz", {}),
 }
 
 SL1602Channels_raw1394 = {
-    **{"ch%d"  % (i+1): SLInputChannel(i, SL1602CtrlsIn_raw1394)        for i in range(8)},
-    **{"ch%d"  % (i+1): SLInputChannel(i, SL1602CtrlsIn_raw1394, True)  for i in range(8, 12)},
-    **{"aux%d" % (i+1): SLInputChannel(i+12, SL1602CtrlsIn_raw1394)     for i in range(4)},
-    "main":     SLInputChannel(16, SL1602CtrlsIn_raw1394, True),
-    "fxa":      SLInputChannel(17, SL1602CtrlsIn_raw1394),
-    "fxb":      SLInputChannel(18, SL1602CtrlsIn_raw1394),
-    "geq0":     SLGeq(0, SL1602CtrlsGeq_raw1394),
-    "fx0":      SLFx(0, SL1602CtrlsFx_raw1394),
-    "fx1":      SLFx(1, SL1602CtrlsFx_raw1394),
-    "masters":  SLMasters(0, SL1602CtrlsMasters_raw1394),
+    **{"ch%d"  % (i+1): RawInputChannel(i, SL1602CtrlsIn_raw1394,    False) for i in range(8)},
+    **{"ch%d"  % (i+1): RawInputChannel(i, SL1602CtrlsIn_raw1394,     True) for i in range(8, 12)},
+    **{"aux%d" % (i+1): RawInputChannel(i+12, SL1602CtrlsIn_raw1394, False) for i in range(4)},
+    "main":     RawInputChannel(16, SL1602CtrlsIn_raw1394, True),
+    "fxa":      RawInputChannel(17, SL1602CtrlsIn_raw1394),
+    "fxb":      RawInputChannel(18, SL1602CtrlsIn_raw1394),
+    "geq0":     RawGeq(0, SL1602CtrlsGeq_raw1394),
+    "fx0":      RawFx(0, SL1602CtrlsFx_raw1394),
+    "fx1":      RawFx(1, SL1602CtrlsFx_raw1394),
+    "masters":  RawMasters(0, SL1602CtrlsMasters_raw1394),
 }
 
+
 @dataclass
-class StudioLive1602Base:
+class StudioLive1602Base(StudioLiveDevice):
     name = "StudioLive 16.0.2"
 
-@dataclass
-class SL1602Info_uc(StudioLive1602Base):
-    port = 6969
-    channels = SL1602Channels_uc
-    magic = [0x04ffffff, 0x000a9204, 8]
 
 @dataclass
-class SL1602Info_raw1394(StudioLive1602Base):
+class SL1602Info_uc(UCStudioLiveDevice, StudioLive1602Base):
+    port = 6969
+    channels = SL1602Channels_uc
+    magic = (0x04ffffff, 0x000a9204, 8)
+
+
+@dataclass
+class SL1602Info_raw1394(RawStudioLiveDevice, StudioLive1602Base):
     channels = SL1602Channels_raw1394
     # Status bit offsets for channel groups
-    sbo = {SLInputChannel: 14, SLFx: 15, SLGeq: 17, SLMasters: 18}
+    sbo = {RawInputChannel: 14, RawFx: 15, RawGeq: 17, RawMasters: 18}
+
 
 @dataclass
 class StudioLive1602:
-    backends = {"uc": SL1602Info_uc, "raw1394" : SL1602Info_raw1394}
+    #backends = {"uc": SL1602Info_uc, "raw1394" : SL1602Info_raw1394}
+    uc = SL1602Info_uc
+    raw = SL1602Info_raw1394
