@@ -102,10 +102,10 @@ SL1602CtrlsFx_raw1394: RawControlDict = {
 
 SL1602CtrlsMasters_raw1394: RawControlDict = {
     "monLevelMain":       SLNibblePair(26),
-    "monLevelPhones":     SLNibblePair(36),
+    "monLevelSolo":       SLNibblePair(36),
     "fxagain":            SLNibblePair(32, SLTypeGain),
     "fxbgain":            SLNibblePair(34, SLTypeGain),
-    "monLevelSolo":       SLNibblePair(28),
+    "monLevelPhones":     SLNibblePair(28),
     "monMain":            SLBit(47, 1),
     "monSolo":            SLBit(47, 2),
     "monFirewire":        SLBit(47, 3),
@@ -121,6 +121,20 @@ SL1602CtrlsMasters_raw1394: RawControlDict = {
     "fxb->aux2":          SLBit(50, 1),
     "fxb->aux3":          SLBit(51, 2),
     "fxb->aux4":          SLBit(51, 3),
+    "recallMute":         SLBit(53, 0),
+    "recallFx":           SLBit(53, 1),
+    "recallGeq":          SLBit(53, 2),
+    "recallPots":         SLBit(53, 3),
+    "recallAssigns":      SLBit(54, 0),
+    "recallEqAndDyn":     SLBit(54, 1),
+    "recallAuxMix":       SLBit(54, 2),
+    "recallFaders":       SLBit(54, 3),
+    "FxA->pre1/2":        SLBit(42, 2),
+    "FxB->pre1/2":        SLBit(42, 3),
+    "aux1->pre1/2":       SLBit(44, 0),
+    "aux2->pre1/2":       SLBit(44, 1),
+    "aux3->pre1/2":       SLBit(44, 2),
+    "aux3->pre1/2":       SLBit(44, 3),
 }
 
 SL1602CtrlsIn_uc: UCControlDict = {
