@@ -1,3 +1,4 @@
+import sys
 import threading
 import time
 import raw1394
@@ -6,10 +7,21 @@ import mido
 from typing import Optional
 
 from .backend import SLBackend, SLChannel, SLType, SLTypeGain, SLTypeFloat, SLValue
-#from .backend import SLInputChannel, SLGeq, SLFx, SLMasters, SLInputChannel, SLGeq, SLFx, SLMasters, SLInputChannel, SLNibblePair
-from .raw import RawInputChannel, RawGeq, RawFx, RawMasters
+from .raw import RawBaseChannel, RawInputChannel, RawFaders, RawStatus
 
-from .raw import RawChannel, RawStudioLiveDevice, SLNibblePair, SLBit
+from .raw import RawChannel, RawStudioLiveDevice, SLNibblePair, SLBit, SLShortInt
+
+
+def h(data: list[int]) -> str:
+    return " ".join([f"{x:02x}" for x in data])
+
+
+def _decode_raw(data: list[int], n: int) -> int:
+    a6 = data[n*3+0]
+    b6 = data[n*3+1]
+    ca = (data[n*3+2] >> 0) & 0x3
+    cb = (data[n*3+2] >> 2) & 0x3
+    return (a6 << 0) | (b6 << 8) | (ca << 6) | (cb << 6 + 8)
 
 
 def _val_from_nibble_pair(data: list[int], dataType: type[SLType]) -> float:
@@ -67,6 +79,7 @@ class MidiAdapter(AbstractAdapter):
 
         self._client_name = None
         self._virtual = False
+        self._passive = False
 
         api = None
 
@@ -80,8 +93,9 @@ class MidiAdapter(AbstractAdapter):
         self._read(10)
 
     def write(self, data: list[int]) -> None:
-        msg = mido.Message.from_bytes(bytes(data))
-        self._portout.send(msg)
+        if not self._passive:
+            msg = mido.Message.from_bytes(bytes(data))
+            self._portout.send(msg)
 
     def read(self, num_bytes: int) -> list[int]:
         return self._read()
@@ -140,14 +154,14 @@ class SLRawBackend(SLBackend):
     def __init__(self, device: type[RawStudioLiveDevice], midi: Optional[str] = None) -> None:
         super().__init__()
         self.device = device
-        self.channels = {n: RawChannel(n, {n: 0 for n in i.ctrls.keys()}, i) for n, i in self.device.channels.items()}
+        self._allchannels = {n: RawChannel(n, {n: 0 for n in i.ctrls.keys()}, i) for n, i in self.device.channels.items()}
+        self.channels = {k: v for k, v in self._allchannels.items() if not k.startswith("_")}
 
         self._midi = midi
 
         self.lock = threading.Lock()
         self._adapter: Optional[AbstractAdapter] = None
 
-        self.last_status = [0] * 0xc*4
         self.sel_channel = -1
 
     def _transceive_msg(self, write_data: list[int], read_bytes: int) -> list[int]:
@@ -167,13 +181,14 @@ class SLRawBackend(SLBackend):
 
         return data
 
-    def _read_data(self, cmd: list[int], length: int, status: Optional[int] = None) -> list[int]:
+    def _read_data(self, cmd: list[int], length: int, status: list[int]) -> list[int]:
         cmd = [0xf0] + cmd + [0xf7]
-        data = self._transceive_msg(cmd, int((length + 2)))
-        if status:
-            assert data[1] == status, "StudioLive: unexpected status for cmd %x: expected %x, got %x" % (cmd[0], status, data[1])
-        assert data[length+1] == 0xf7, "StudioLive: no EOF byte for cmd %x" % (cmd[1])
-        return data[:length+1]
+        length += 2
+        data = self._transceive_msg(cmd, (length + 2))
+        assert data[1:len(status) + 1] == status, f"StudioLive: unexpected status for cmd {cmd} expected {status}, got {data[1:len(status) + 1]}"
+        #assert data[length + 1] == 0xf7, "StudioLive: no EOF byte for cmd %x, %x" % (cmd[1], data[length+1])
+        #assert len(data) == (length + len(status))
+        return data[1+len(status):len(status) + length-1]
 
     def _write_data(self, cmd: list[int], status: Optional[int] = None) -> None:
         cmd = [0xf0] + cmd + [0xf7]
@@ -184,14 +199,8 @@ class SLRawBackend(SLBackend):
 
     def _write_raw(self, cmd: list[int]) -> None:
         cmd = [0xf0] + cmd + [0xf7]
-        self._transceive_msg(cmd, 0)
+        self._transceive_msg(cmd, 0) # FIXME: Check for ACK?
         time.sleep(0.1)
-
-    def _read_status(self) -> list[int]:
-        return self._read_data([0x38, 0x03], 45, 0x39)[:-2]
-
-    def _read_faders(self) -> list[int]:
-        return self._read_data([0x6e], 42, 0x6e)[2:-1]
 
     def route_source_1516(self, main_mix: bool = False) -> None:
         if main_mix:
@@ -201,66 +210,29 @@ class SLRawBackend(SLBackend):
             # Route analog input 15/16 to FireWire stream 15/16
             self._write_raw([0x52, 0x13, 0x0e, 0x00, 0x0e, 0x00, 0x00])
 
-    def _read_input_channel(self, ch: RawChannel) -> list[int]:
-        data = self._read_data([0x6b, ch.info.index], 122, 0x6b)
-        assert data[2] == ch.info.index, "StudioLive: unexpected channel for cmd %x: expected %x, got %x" % (0x6b, ch.info.index, data[2])
-        return data
+    def _rd_channel(self, ch: RawBaseChannel) -> list[int]:
+        assert ch.read_id
+        assert ch.resp_id
+        return self._read_data(ch.read_id, ch.length, ch.resp_id)
 
-    def _read_master(self) -> list[int]:
-        return self._read_data([0x60], 58, 0x60)
+    def _wr_channel(self, ch: RawChannel) -> None:
+        assert isinstance(ch.info, RawBaseChannel)
+        assert ch.info.write_id
 
-    def _read_fx(self, ch: RawChannel) -> list[int]:
-        return self._read_data([0x6d, 3, ch.info.index], 18, 0x6c)
-
-    def _read_geq(self, ch: RawChannel) -> list[int]:
-        return self._read_data([0x6d, 1, ch.info.index], 67, 0x6c)
-
-    def _write_input_channel(self, ch: RawChannel) -> None:
-        self._write_data([0x6a] + ch.raw[2:-1], 0x10)
-
-    def _write_geq(self, ch: RawChannel) -> None:
-        self._write_data([0x6c] + ch.raw[2:-1], 0x10)
-
-    def _write_fx(self, ch: RawChannel) -> None:
-        self._write_data([0x6c] + ch.raw[2:-1], 0x10)
-
-    def _write_master(self, ch: RawChannel) -> None:
-        self._write_data([0x6f] + ch.raw[2:-1], 0x10)
-
-    def _read_channel(self, ch: RawChannel) -> list[int]:
-        if isinstance(ch.info, RawInputChannel):
-            return self._read_input_channel(ch)
-        elif isinstance(ch.info, RawGeq):
-            return self._read_geq(ch)
-        elif isinstance(ch.info, RawFx):
-            return self._read_fx(ch)
-        elif isinstance(ch.info, RawMasters):
-            return self._read_master()
-        else:
-            print("Unknown channel type to read")
-            return [0]
-
-    def _write_channel(self, ch: RawChannel) -> None:
-        if isinstance(ch.info, RawInputChannel):
-            self._write_input_channel(ch)
-        elif isinstance(ch.info, RawGeq):
-            self._write_geq(ch)
-        elif isinstance(ch.info, RawFx):
-            self._write_fx(ch)
-        elif isinstance(ch.info, RawMasters):
-            return self._write_master(ch)
-        else:
-            print("No write for channel:", ch)
+        self._write_data(ch.info.write_id + ch.raw + [0], 0x10)
 
     def _update_levels_from_status(self, levels: list[int]) -> None:
         i = 0
+
+        levels = levels[19:19 + 23]
+
         for ch in self.channels.values():
             assert isinstance(ch, RawChannel)
-            if isinstance(ch.info, RawInputChannel):
+            if isinstance(ch.info, RawInputChannel) and ch.info.levels:
                 # TODO: Max value?
-                if ch.info.stereo:
+                if ch.info.levels == 2:
                     if i + 1 < len(levels):
-                        ch.level = (levels[i], levels[i+1])
+                        ch.level = (levels[i], levels[i + 1])
                     i += 2
                 else:
                     if i < len(levels):
@@ -268,22 +240,35 @@ class SLRawBackend(SLBackend):
                     i += 1
         super()._update_levels()
 
-    def _update_faders(self, faders: list[int]) -> None:
-        for ch in self.channels.values():
+    def _update_faders(self, data: list[int]) -> None:
+        for name, ch in self.channels.items():
             assert isinstance(ch, RawChannel)
             if isinstance(ch.info, RawInputChannel):
                 control = "gain"
-                value = _val_from_nibble_pair(faders[ch.info.index*2:ch.info.index*2+2], SLTypeGain)
+                b = ch.info.index
+                value = _val_from_nibble_pair(data[b * 2: b * 2 + 2], SLTypeGain)
                 self._update_control(ch, control, value)
 
     def _update_channel(self, ch: RawChannel, data: list[int]) -> None:
         handled = False
 
+        if len(data) != ch.info.length:
+            print("_update_channel data length mismatch:", type(ch.info), data, len(data), ch.info.length)
+            return
+
+        if isinstance(ch.info, RawFaders):
+            return self._update_faders(data)
+        elif isinstance(ch.info, RawStatus):
+            self._update_levels_from_status(data)
+
         for control, pos in ch.info.ctrls.items():
+            b = pos.byte - ch.info.offset
             if isinstance(pos, SLNibblePair):
-                value = _val_from_nibble_pair(data[pos.byte:pos.byte+2], pos.dataType)
+                value = _val_from_nibble_pair(data[b:b + 2], pos.dataType)
+            elif isinstance(pos, SLShortInt):
+                value = data[b:b + 1][0]
             elif isinstance(pos, SLBit):
-                value = _get_bit_val(data, pos.byte, pos.bit)
+                value = _get_bit_val(data, b, pos.bit)
             else:
                 print("StudioLive: Unknown control type")
 
@@ -295,65 +280,99 @@ class SLRawBackend(SLBackend):
                 print("StudioLive: Channel %s change: byte %d, oldval = %x, newval = %x" % (ch.name, i, ch.raw[i], data[i]))
         ch.raw = data
 
+    def _readonly_update(self) -> None:
+        channels: dict[str, RawChannel] = {k: v for k, v in self._allchannels.items() if isinstance(v, RawChannel)}
+
+        while not self._stop_event.is_set():
+            assert isinstance(self._adapter, MidiAdapter)
+            data = self._adapter._read(1e12)
+            size = len(data)
+            assert data[size - 1] == 0xf7, "StudioLive: no EOF byte"
+
+            echo = True
+
+            match = False
+            for name, ch in channels.items():
+                assert ch.info.resp_id, ch.info
+
+                if ch.info.read_id and ch.info.read_id == data[1:1+len(ch.info.read_id)]:
+                    match = True
+                if ch.info.resp_id and ch.info.resp_id == data[1:1+len(ch.info.resp_id)]:
+                    match = True
+                if ch.info.write_id and ch.info.write_id == data[1:1+len(ch.info.write_id)]:
+                    match = True
+
+                if match:
+                    raw = data[:-1][ch.info.offset:ch.info.offset + ch.info.length]
+
+                    if isinstance(ch.info, RawStatus):
+                        echo = False
+
+                    if echo:
+                        print(type(ch.info), f"{len(data)}/{len(raw)}:", h(data[:ch.info.offset]), ">", h(raw), "<", h(data[ch.info.offset + len(raw):]))
+
+                    if len(raw):
+                        self._update_channel(ch, raw)
+                    break
+
+            match |= self._check_for_raw(data)
+
     def _update_process(self) -> None:
+        if isinstance(self._adapter, MidiAdapter) and self._adapter._passive:
+            self._readonly_update()
+            return
+
+        ch_status = self._allchannels["_status"]
         while not self._stop_event.is_set():
             try:
-                #status = self._read_data([0x38, 0x03], 48, 0x39)
-                status = self._read_status()
-                self._update_levels_from_status(status[22:22+23])
-                #print("xyz", status)
+                status = self._rd_channel(ch_status.info)
+                self._update_channel(ch_status, status)
 
-                #if self.debug and self.last_status != status:
-                #    print("StudioLive: INDEX   ", " ".join("%02d" % b for b in range(64)))
-                #    print("StudioLive: Status: ", " ".join("%02x" % b for b in status))
+                for mod_ctrl, ch_name in self.device.status_modified.items():
+                    if ch_status.ctrls[mod_ctrl]:
+                        ch = self._allchannels[ch_name]
+                        self._update_channel(ch, self._rd_channel(ch.info))
 
-                #status[4]: Selected channel
-                #if self.sel_channel != status[4]:
-                #    self.sel_channel = status[4]
-                #    print("Selected channel: %x" % self.sel_channel)
-
-                #status[5]: Input/Output/GR/Locale buttons
-                #if self.last_status[5] != status[5] and self.debug:
-                #    print("Meters mode:", self.last_status[5])
-                #    pass
-
-                #status[19]: (only) faders moved
-                if status[19]:
-                    self._update_faders(self._read_faders())
-                #status[20]: GEQ button?
-
-                for ch in self.channels.values():
-                    assert isinstance(ch, RawChannel)
-                    #ch: RawChannel = channel
-                    if type(ch.info) in self.device.sbo:
-                        byte = self.device.sbo[type(ch.info)] - int(ch.info.index / 4)
-                        bit = ch.info.index % 4
-                        if status[byte] & (1 << bit):
-                            self._update_channel(ch, self._read_channel(ch))
-
-                self.last_status = status
                 time.sleep(0.1)
 
             except SystemError as e:
                 self._adapter = None
                 print("SystemError, trying connect_hw:", e)
                 self.connect_hw()
-            except Exception as e:
-                print("Exception:", e)
-                raise
+
+    def _check_for_raw(self, data: list[int]) -> bool:
+        if data[1:3] == [0x2e, 0x40] or data[1:3] == [0x2e, 0x20]:
+            rawdump = []
+            rd = [_decode_raw(data, n) for n in range((len(data)-4)//3)]
+            for n in rd:
+                rawdump.append((n >> 0) & 0xFF)
+                rawdump.append((n >> 8) & 0xFF)
+            print("RD", "".join([f"{x:02x}" for x in rawdump]))
+            if True:
+                print("RC", " ".join([chr(n) if (
+                    n >= ord('a') and n <= ord('z') or
+                    n >= ord('A') and n <= ord('Z') or
+                    n >= ord('0') and n <= ord('9') or
+                    False
+                ) else "_" for n in rawdump]))
+            return True
+        return False
 
     def set_control(self, ch: SLChannel, control: str, value: SLValue) -> None:
         assert isinstance(ch, RawChannel)
         pos = ch.info.ctrls[control]
+        b = pos.byte - ch.info.offset
         if isinstance(pos, SLNibblePair):
-            ch.raw[pos.byte:pos.byte + 2] = _val_to_nibble_pair(value, pos.dataType)
+            ch.raw[b:b + 2] = _val_to_nibble_pair(value, pos.dataType)
+        elif isinstance(pos, SLShortInt):
+            ch.raw[b:b + 1] = [int(value)]
         elif isinstance(pos, SLBit):
-            _set_bit_val(ch.raw, pos.byte, pos.bit, value >= 0.5)
+            _set_bit_val(ch.raw, b, pos.bit, value >= 0.5)
         else:
             print("StudioLive: Unknown control type")
 
         try:
-            self._write_channel(ch)
+            self._wr_channel(ch)
         except SystemError:
             print("Device not responding, client request unsuccessfull.")
             #time.sleep(5)
@@ -386,7 +405,6 @@ class SLRawBackend(SLBackend):
                 print("Device not responding, trying again in 5 secs...")
                 time.sleep(5)
             except Exception:
-                import sys
                 print("Unexpected error:", sys.exc_info()[0])
                 raise
 
@@ -396,7 +414,10 @@ class SLRawBackend(SLBackend):
         print("StudioLive: connected")
 
     def init_data(self) -> None:
+        if isinstance(self._adapter, MidiAdapter) and self._adapter._passive:
+            return
+
         # Read state of all channels
         for ch in self.channels.values():
             assert isinstance(ch, RawChannel)
-            self._update_channel(ch, self._read_channel(ch))
+            self._update_channel(ch, self._rd_channel(ch.info))

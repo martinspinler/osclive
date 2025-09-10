@@ -5,7 +5,7 @@ from .backend import SLTypeInt, SLTypeGain, StudioLiveDevice
 #from .backend import SLInputChannel, SLGeq, SLFx, SLMasters
 
 from .uc import UCStudioLiveDevice, UCInputChannel
-from .raw import SLNibblePair, SLBit, RawInputChannel, RawGeq, RawFx, RawMasters, RawStudioLiveDevice
+from .raw import SLNibblePair, SLBit, RawInputChannel, RawGeq, RawFx, RawMasters, RawStudioLiveDevice, RawMidiConfig, RawStatus, RawFaders, SLShortInt
 
 
 SL1602EqFreqs = [
@@ -42,7 +42,7 @@ SL1602EqFreqs = [
     "20kHz",
 ]
 
-type RawControlDict = dict[str, Union[SLNibblePair, SLBit]]
+type RawControlDict = dict[str, Union[SLNibblePair, SLBit, SLShortInt]]
 type UCControlDict = dict[str, int]
 
 SL1602CtrlsIn_raw1394: RawControlDict = {
@@ -100,12 +100,64 @@ SL1602CtrlsFx_raw1394: RawControlDict = {
     **{"param%d" % i: SLNibblePair(i*2+7) for i in range(6)}
 }
 
+SL1602CtrlsMidiConfig_raw1394: RawControlDict = {
+    "control_mode":     SLShortInt(3),
+    "channel":          SLNibblePair(5, SLTypeInt),
+    "pc_ch_scene":      SLShortInt(7),
+    "pc_ch_fxa":        SLShortInt(9),
+    "pc_ch_fxb":        SLShortInt(11),
+    "out_level_main":   SLNibblePair(12, SLTypeInt),
+    "out_level_fxa":    SLNibblePair(14, SLTypeInt),
+    "out_level_fxb":    SLNibblePair(16, SLTypeInt),
+    "mute_fxa":         SLNibblePair(18, SLTypeInt),
+    "mute_fxb":         SLNibblePair(20, SLTypeInt),
+    "source":           SLBit(25, 0),
+}
+
+SL1602Status_raw1394: RawControlDict = {
+    "sel_channel":      SLShortInt(4),
+    "meters":           SLNibblePair(5, SLTypeInt),
+
+    "modified_main":    SLBit(10, 0),
+    "modified_fxa":     SLBit(10, 1),
+    "modified_fxb":     SLBit(10, 2),
+
+    "modified_ch1":     SLBit(14, 0),
+    "modified_ch2":     SLBit(14, 1),
+    "modified_ch3":     SLBit(14, 2),
+    "modified_ch4":     SLBit(14, 3),
+    "modified_ch5":     SLBit(13, 0),
+    "modified_ch6":     SLBit(13, 1),
+    "modified_ch7":     SLBit(13, 2),
+    "modified_ch8":     SLBit(13, 3),
+    "modified_ch9":     SLBit(12, 0),
+    "modified_ch10":    SLBit(12, 1),
+    "modified_ch11":    SLBit(12, 2),
+    "modified_ch12":    SLBit(12, 3),
+    "modified_aux1":    SLBit(11, 0),
+    "modified_aux2":    SLBit(11, 1),
+    "modified_aux3":    SLBit(11, 2),
+    "modified_aux4":    SLBit(11, 3),
+
+    "modified_fx0":     SLBit(15, 0),
+    "modified_fx1":     SLBit(16, 0),
+
+    "modified_geq0":    SLBit(17, 0),
+    "modified_masters": SLBit(18, 0),
+    "modified__faders": SLBit(19, 0),
+    "modified_midicfg": SLBit(20, 0),
+
+    **{f"_level_ch{x+1}":       SLShortInt(22+x) for x in range(12)},
+    **{f"_level_aux{x+1}":      SLShortInt(38+x) for x in range(4)},
+    **{f"_level_main{x+1}":     SLShortInt(42+x) for x in range(2)},
+}
+
 SL1602CtrlsMasters_raw1394: RawControlDict = {
     "monLevelMain":       SLNibblePair(26),
-    "monLevelPhones":     SLNibblePair(36),
+    "monLevelSolo":       SLNibblePair(36),
     "fxagain":            SLNibblePair(32, SLTypeGain),
     "fxbgain":            SLNibblePair(34, SLTypeGain),
-    "monLevelSolo":       SLNibblePair(28),
+    "monLevelPhones":     SLNibblePair(28),
     "monMain":            SLBit(47, 1),
     "monSolo":            SLBit(47, 2),
     "monFirewire":        SLBit(47, 3),
@@ -121,6 +173,20 @@ SL1602CtrlsMasters_raw1394: RawControlDict = {
     "fxb->aux2":          SLBit(50, 1),
     "fxb->aux3":          SLBit(51, 2),
     "fxb->aux4":          SLBit(51, 3),
+    "recallMute":         SLBit(53, 0),
+    "recallFx":           SLBit(53, 1),
+    "recallGeq":          SLBit(53, 2),
+    "recallPots":         SLBit(53, 3),
+    "recallAssigns":      SLBit(54, 0),
+    "recallEqAndDyn":     SLBit(54, 1),
+    "recallAuxMix":       SLBit(54, 2),
+    "recallFaders":       SLBit(54, 3),
+    "FxA->pre1/2":        SLBit(42, 2),
+    "FxB->pre1/2":        SLBit(42, 3),
+    "aux1->pre1/2":       SLBit(44, 0),
+    "aux2->pre1/2":       SLBit(44, 1),
+    "aux3->pre1/2":       SLBit(44, 2),
+    "aux4->pre1/2":       SLBit(44, 3),
 }
 
 SL1602CtrlsIn_uc: UCControlDict = {
@@ -240,16 +306,19 @@ SL1602Channels_uc = {
 }
 
 SL1602Channels_raw1394 = {
-    **{"ch%d"  % (i+1): RawInputChannel(i, SL1602CtrlsIn_raw1394,    False) for i in range(8)},
-    **{"ch%d"  % (i+1): RawInputChannel(i, SL1602CtrlsIn_raw1394,     True) for i in range(8, 12)},
-    **{"aux%d" % (i+1): RawInputChannel(i+12, SL1602CtrlsIn_raw1394, False) for i in range(4)},
-    "main":     RawInputChannel(16, SL1602CtrlsIn_raw1394, True),
+    **{"ch%d"  % (i+1): RawInputChannel(i, SL1602CtrlsIn_raw1394,    1) for i in range(8)},
+    **{"ch%d"  % (i+1): RawInputChannel(i, SL1602CtrlsIn_raw1394,    2) for i in range(8, 12)},
+    **{"aux%d" % (i+1): RawInputChannel(i+12, SL1602CtrlsIn_raw1394, 1) for i in range(4)},
+    "main":     RawInputChannel(16, SL1602CtrlsIn_raw1394, 2),
     "fxa":      RawInputChannel(17, SL1602CtrlsIn_raw1394),
     "fxb":      RawInputChannel(18, SL1602CtrlsIn_raw1394),
     "geq0":     RawGeq(0, SL1602CtrlsGeq_raw1394),
     "fx0":      RawFx(0, SL1602CtrlsFx_raw1394),
     "fx1":      RawFx(1, SL1602CtrlsFx_raw1394),
     "masters":  RawMasters(0, SL1602CtrlsMasters_raw1394),
+    "midicfg":  RawMidiConfig(0, SL1602CtrlsMidiConfig_raw1394),
+    "_status":  RawStatus(0, SL1602Status_raw1394),
+    "_faders":  RawFaders(0, {}),
 }
 
 
@@ -268,8 +337,17 @@ class SL1602Info_uc(UCStudioLiveDevice, StudioLive1602Base):
 @dataclass
 class SL1602Info_raw1394(RawStudioLiveDevice, StudioLive1602Base):
     channels = SL1602Channels_raw1394
-    # Status bit offsets for channel groups
-    sbo = {RawInputChannel: 14, RawFx: 15, RawGeq: 17, RawMasters: 18}
+    status_modified = {
+        f"modified_{ch}": f"{ch}" for ch in [
+            *[f"ch{n+1}" for n in range(12)],
+            *[f"fx{n}" for n in range(2)],
+            *[f"fx{chr(ord('a') + n)}" for n in range(2)],
+            *[f"geq{n}" for n in range(1)],
+            "main",
+            "masters",
+            "_faders",
+        ]
+    }
 
 
 @dataclass
