@@ -76,10 +76,11 @@ class SLBackend:
     def _update_control(self, ch: SLChannel, control: str, value: SLValue) -> bool:
         if ch.ctrls[control] != value:
             ch.ctrls[control] = value
-            if self.debug:
-                print("StudioLive: Upd %-8s %-14s = %.3f" % (ch.name + ":", control, value))
-            for callback in self.listener.update_callbacks:
-                callback(ch.name, control, value)
+            if not ch.name.startswith("_") and not control.startswith("_"):
+                if self.debug:
+                    print("StudioLive: Upd %-8s %-14s = %.3f" % (ch.name + ":", control, value))
+                for callback in self.listener.update_callbacks:
+                    callback(ch.name, control, value)
             return True
         else:
             return False
