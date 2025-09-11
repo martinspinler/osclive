@@ -9,18 +9,13 @@ from .SLBackend import *
 
 def _val_from_nibble_pair(data, dataType):
     value = (data[0] << 4 | data[1])# / 256
-    if dataType == SLTypeGain:
-        # The raw value is in range 4 - 255
-        value = (value - 4) / 251
-    elif dataType == SLTypeFloat:
+    if dataType in [SLTypeFloat, SLTypeGain]:
         # The raw value is in range 0 - 255
         value /= 255
     return value
 
 def _val_to_nibble_pair(value, dataType):
-    if dataType == SLTypeGain:
-        value = value * 251 + 4
-    elif dataType == SLTypeFloat:
+    if dataType in [SLTypeFloat, SLTypeGain]:
         value = value * 255
     value = max(0, min(255, int(value)))
     return [(value >> 4) & 0x0F, (value >> 0) & 0x0F]
