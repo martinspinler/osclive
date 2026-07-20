@@ -1,10 +1,9 @@
 import re
 
-from typing import Any
-
 from .studiolive import SLRemote
 
-from .osc.server import DispatchedOSCRequestHandler, OscValue
+from .osc import OscValue
+from .osc.server import DispatchedOSCRequestHandler
 
 
 class SLClientHandler(DispatchedOSCRequestHandler):
@@ -72,8 +71,7 @@ class SLClientHandler(DispatchedOSCRequestHandler):
         self.init()
 
     def init(self) -> None:
-        all_channels = self.inputs + self.auxs + self.fxs + ["main"]
-        for ch in all_channels:
+        for ch in self.all_channels:
             for ctrl in self.channel_ctrls:
                 value = self.sl.get_control(ch, ctrl)
                 if value is None:
@@ -82,11 +80,11 @@ class SLClientHandler(DispatchedOSCRequestHandler):
                     self.send_message("/channel/%s/%s" % (ch, ctrl), value)
 
         # Update labels
-        for i, (ch, name) in enumerate(self.input_names.items(), 1):
+        for ch, name in self.input_names.items():
             self.send_message("/channel/%s/label" % ch, name)
 
-        for i, (ch, name) in enumerate(self.aux_names.items(), 1):
-            self.send_message("/channel/%s/label" % ch , name)
+        for ch, name in self.aux_names.items():
+            self.send_message("/channel/%s/label" % ch, name)
         self.send_message("/channel/main/label", 'Main')
 
         ch = "geq0"
@@ -127,9 +125,7 @@ class SLClientHandler(DispatchedOSCRequestHandler):
                 self.send_message("/channel/%s/level" % ch, int(value * 16))
 
     def sl_control_handler(self, channel: str, ctrl: str, value: float) -> None:
-        #print("SL Control handler, channel %s, ctrl %s" %( channel, ctrl))
-        all_channels = self.inputs + self.auxs + self.fxs + ["main"]
-        if channel in all_channels:
+        if channel in self.all_channels:
             self.send_message("/channel/%s/%s" % (channel, ctrl), value)
 
 #        # PAGE "Equalizer"
@@ -145,12 +141,10 @@ class SLClientHandler(DispatchedOSCRequestHandler):
 #        if channel == "fx0":
 #            self.send_message("/fx/%s" % ctrl, value)
 
-    def channel_control_handler(self, addr: str, args: list[Any], value: float) -> None:
-        ch, ctrl = args[:2]
+    def channel_control_handler(self, addr: str, ch: str, ctrl: str, value: float = 0) -> None:
         self.sl.set_control(ch, ctrl, value)
 
-    def channel_control_extra_handler(self, addr: str, args: list[Any], value: OscValue) -> None:
-        ch, ctrl = args[:2]
+    def channel_control_extra_handler(self, addr: str, ch: str, ctrl: str, value: OscValue = 0) -> None:
         if ctrl == "panreset":
             self.sl.set_control(ch, "pan", 0.5)
 

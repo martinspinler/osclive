@@ -52,7 +52,7 @@ def _get_bit_val(data: list[int], byte: int, bit: int) -> int:
 
 
 class AbstractAdapter():
-    def write(self, wd: list[int]) -> None:
+    def write(self, data: list[int]) -> None:
         raise NotImplementedError
 
     def read(self, num_bytes: int) -> list[int]:
@@ -74,8 +74,8 @@ class MidiAdapter(AbstractAdapter):
                 if substr in i:
                     return i
             raise PortNotFoundError(f'MIDI port {substr} not found in: ' + ", ".join(strings))
-        self._input_port_name = findSubstr(mido.get_input_names(), self._port_name)
-        self._output_port_name = findSubstr(mido.get_output_names(), self._port_name)
+        self._input_port_name = findSubstr(mido.get_input_names(), self._port_name)  # type: ignore[attr-defined]
+        self._output_port_name = findSubstr(mido.get_output_names(), self._port_name)  # type: ignore[attr-defined]
 
         self._client_name = None
         self._virtual = False
@@ -83,11 +83,11 @@ class MidiAdapter(AbstractAdapter):
 
         api = None
 
-        self._portout = mido.open_output(self._output_port_name, client_name=self._client_name, virtual=self._virtual, api=api)
-        self._portin = mido.open_input(self._input_port_name, client_name=self._client_name, virtual=self._virtual, api=api)
+        self._portout = mido.open_output(self._output_port_name, client_name=self._client_name, virtual=self._virtual, api=api)  # type: ignore[attr-defined]
+        self._portin = mido.open_input(self._input_port_name, client_name=self._client_name, virtual=self._virtual, api=api)  # type: ignore[attr-defined]
 
         self._in_buffer: list[int] = []
-        self._portin.callback = self._input_callback
+        self._portin.callback = self._input_callback  # type: ignore[method-assign]
 
         self.write([0xf0, 0x33, 0xf7])
         self._read(10)
@@ -114,8 +114,8 @@ class MidiAdapter(AbstractAdapter):
         return list(b)
 
     def _input_callback(self, msg: mido.Message) -> None:
-        if msg.type == 'sysex':
-            self._in_buffer += [0xf0] + list(msg.data[:]) + [0xf7]
+        if msg.type == 'sysex':  # type: ignore[attr-defined]
+            self._in_buffer += [0xf0] + list(msg.data[:]) + [0xf7]  # type: ignore[attr-defined]
 
 
 class Raw1394Adapter(AbstractAdapter):
@@ -127,11 +127,11 @@ class Raw1394Adapter(AbstractAdapter):
         while self._recv_msg(0x01, True)[0] != 0xfe and retries < 100:
             retries += 1
 
-    def write(self, wd: list[int]) -> None:
-        if len(wd) % 4:
-            wd += [0xf7] * (4 - len(wd) % 4)
+    def write(self, data: list[int]) -> None:
+        if len(data) % 4:
+            data += [0xf7] * (4 - len(data) % 4)
         wa = 0xFFFFe0f00408
-        self._handle.write(wa, bytearray(wd))
+        self._handle.write(wa, bytearray(data))
 
     def read(self, num_bytes: int) -> list[int]:
         return self._recv_msg(num_bytes)
@@ -271,6 +271,7 @@ class SLRawBackend(SLBackend):
                 value = _get_bit_val(data, b, pos.bit)
             else:
                 print("StudioLive: Unknown control type")
+                continue
 
             if self._update_control(ch, control, value):
                 handled = True

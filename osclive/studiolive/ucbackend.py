@@ -124,8 +124,7 @@ class SLUcBackend(SLBackend):
                 return
 
             control = channel.info._control_rev[control_id]
-            self._update_control(channel, control, value) # TODO!!!!!
-            channel.ctrls[control] = value
+            self._update_control(channel, control, value)
 
         elif category == 7:
             print("StudioLive: recv unknown category %s, message size %d" % (category, len(message_body)))

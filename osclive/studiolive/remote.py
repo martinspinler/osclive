@@ -35,9 +35,6 @@ class SLRemote(SLListener):
         ch = self.channels[channel]
         assert control in ch.ctrls, "Control %s is not in channel %s" % (control, ch.name)
 
-        if control not in ch.ctrls:
-            ch.ctrls[control] = 0
-
         value = ch.ctrls[control]
 
         if self.debug:

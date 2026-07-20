@@ -23,7 +23,7 @@ Osclive implements two backends for communication with mixer:
      Connects to the mixer over raw1394 library and directly accesses mixer configuration registers.
      The pyraw1394 library is currently Linux only, but works also on ARM (tested on RPi4-CM with PCIe FireWire adapter).
 
-Both backend methods are reverese-engineered, so not all features of the original control application can be used,
+Both backend methods are reverse-engineered, so not all features of the original control application can be used,
 but the main functionality is supported and stable.
 
 # Setup
@@ -43,7 +43,7 @@ For the UC backend use the `-u addr` parameter, where `addr` is the IP address o
 The recommended client is [TouchOSC](https://hexler.net/touchosc).
 
 You can generate layout for TouchOSC by script located in `tools/topyg.py`.
-The scripts needs just the [tosclib](https://github.com/AlbertoV5/tosclib) Python library.
+The script needs just the [tosclib](https://github.com/AlbertoV5/tosclib) Python library.
 
 The *osclive* server broadcasts a Zeroconf service info, if your client doesn't support Zeroconf, use the TCP protocol with OSC 1.0 framing and port 4301.
 

@@ -1,166 +1,162 @@
+import time
 import socket
 import socketserver
 import threading
 
+from contextlib import contextmanager
+
 import netifaces
-
-from typing import Union, Any, Optional, Iterable, Callable
-
-from pythonosc import osc_packet
-#from pythonosc.osc_message import OscMessage
-from pythonosc.osc_bundle import OscBundle
-from pythonosc.osc_message_builder import OscMessageBuilder
-from pythonosc.osc_bundle_builder import OscBundleBuilder, IMMEDIATELY
 
 from zeroconf import ServiceInfo, Zeroconf
 
-type BaseOscValue = Union[int, float, bytes, str, bool]
-type OscValue = Union[int, float, bytes, str, bool, list[BaseOscValue]]
-type DORHCallback = Union[Callable[[str, Any, Any], None], Callable[[str, Any], None], Callable[[str], None]]
+from typing import Any, Tuple, Optional, Generator, Union
+
+from pythonosc.osc_message_builder import OscMessageBuilder
+from pythonosc.osc_message import OscMessage
+from pythonosc.osc_bundle import OscBundle
+from pythonosc.osc_bundle_builder import OscBundleBuilder, IMMEDIATELY
+from pythonosc.osc_packet import OscPacket
+
+type OscValue = Union[int, float, str, bytes, bool]
+
+DispatchedOscCb = Any
 
 
-class ThreadedTCPOSCRequestHandler(socketserver.BaseRequestHandler):
-    _bundle: Optional[list[Any]]
-    server: "ThreadedTCPServer"
-
-    class BundleManager:
-        def __init__(self, request_handler: "ThreadedTCPOSCRequestHandler") -> None:
-            self._rh = request_handler
-
-        def __enter__(self) -> None:
-            if self._rh._bundle_inner == 0:
-                self._rh._bundle = []
-            self._rh._bundle_inner += 1
-
-        def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-            self._rh._bundle_inner -= 1
-            if self._rh._bundle_inner == 0:
-                if self._rh._bundle:
-                    bundle = self._rh._bundle
-                    self._rh._bundle = None
-                    self._rh.send_bundle(bundle)
+class TCPOSCRequestHandler(socketserver.BaseRequestHandler):
+    server: "TCPOSCServer"  # type: ignore[assignment]
 
     def setup(self) -> None:
         super().setup()
-        print("OSC TCP client connected", self.client_address)
-
-        self._bundle = None
+        print("TCP OSC client connected", self.client_address)
+        self.server.clients.append(self)
+        self._bundle: Optional[list[OscMessage]] = None
         self._bundle_inner = 0
 
-        self.server.clients.append(self)
+    def _recv(self, size: int) -> bytes:
+        recv = bytes()
+        while len(recv) != size:
+            if self.request is None:
+                raise ConnectionError
+            b = self.request.recv(size - len(recv))
+            if not b:
+                raise ConnectionError
 
-    def _recv(self, size: int) -> Optional[bytes]:
-        data = b''
-        while len(data) != size:
-            recv = self.request.recv(size - len(data))
-            if not recv:
-                return None
-            data += recv
-        return data
+            recv += b
+        return recv
 
     def handle(self) -> None:
-        while True:
-            sz = self._recv(4)
-            if sz is None:
-                break
-
-            data = self._recv(int.from_bytes(sz, byteorder='big'))
-            if data is None:
-                break
-
-            for m in osc_packet.OscPacket(data).messages:
-                self.handle_message(m.message.address, m.message.params)
+        try:
+            while True:
+                data = self._recv(4)
+                size = int.from_bytes(data, byteorder='big')
+                data = self._recv(size)
+                for m in OscPacket(data).messages:
+                    self.handle_message(m.message.address, *m.message.params)
+        except ConnectionError:
+            pass
 
     def finish(self) -> None:
-        print("OSC TCP client disconnected", self.client_address)
+        print("TCP OSC client disconnected", self.client_address)
         self.server.clients.remove(self)
         super().finish()
 
-    def handle_message(self, address: str, value: OscValue) -> None:
+    def handle_message(self, address: str, *params: *Tuple[OscValue, ...]) -> None:
         pass
 
-    def bundle(self) -> BundleManager:
-        return self.BundleManager(self)
+    @contextmanager
+    def bundle(self) -> Generator["TCPOSCRequestHandler", None, None]:
+        if self._bundle_inner == 0:
+            self._bundle = []
+        self._bundle_inner += 1
+        try:
+            yield self
+        finally:
+            self._bundle_inner -= 1
+            if self._bundle_inner == 0:
+                if self._bundle:
+                    bundle_msgs = self._bundle
+                    self._bundle = None
+                    self.send_bundle(bundle_msgs)
+                else:
+                    self._bundle = None
 
-    def send_bundle(self, msg_list: list[OscBundle]) -> None:
+    def send_bundle(self, msg_list: list[OscMessage]) -> None:
         bb = OscBundleBuilder(IMMEDIATELY)
         for msg in msg_list:
             bb.add_content(msg)
         bundle = bb.build()
-        self.request.sendall(bundle.size.to_bytes(length=4, byteorder='big') + bundle.dgram)
+        self.send_msg(bundle)
 
-    def send_message(self, address: str, value: OscValue) -> None:
+    def send_message(self, address: str, *values: *Tuple[OscValue, ...]) -> None:
         builder = OscMessageBuilder(address=address)
-        values: list[BaseOscValue]
-        if value is None:
-            values = []
-        elif not isinstance(value, Iterable) or isinstance(value, (str, bytes)):
-            values = [value]
-        else:
-            values = value
-
         for val in values:
             builder.add_arg(val)
         msg = builder.build()
-
-        if self._bundle is None:
-            try:
-                self.request.sendall(msg.size.to_bytes(length=4, byteorder='big') + msg._dgram)
-            except Exception:
-                pass
-        else:
+        if self._bundle is not None:
             self._bundle.append(msg)
+        else:
+            self.send_msg(msg)
+
+    def send_msg(self, msg: OscMessage | OscBundle) -> None:
+        try:
+            self.request.sendall(msg.size.to_bytes(length=4, byteorder='big') + msg.dgram)
+        except Exception:
+            pass
 
 
-class DispatchedOSCRequestHandler(ThreadedTCPOSCRequestHandler):
-    def map(self, path: str, callback: DORHCallback, *args: Any) -> None:
+class DispatchedOSCRequestHandler(TCPOSCRequestHandler):
+    # TODO: Fix Any, see callback below
+    def map(self, path: str, callback: DispatchedOscCb, *args: *Tuple[Any, ...]) -> None:
         self._dispatcher_maps[path] = (callback, args)
 
     def setup(self) -> None:
         super().setup()
-        self._dispatcher_maps: dict[str, tuple[DORHCallback, Any]] = {}
+        self._dispatcher_maps: dict[str, Tuple[DispatchedOscCb, Tuple[Any]]] = {}
 
-    def handle_message(self, address: str, value: OscValue) -> None:
+    def handle_message(self, address: str, *values: *Tuple[OscValue, ...]) -> None:
         mapping = self._dispatcher_maps.get(address)
         if mapping:
-            callback: Any  # DORHCallback
             callback, args = mapping
-            if args:
-                callback(address, args, *value)
-            else:
-                callback(address, *value)
+            callback(address, *args, *values)
 
 
-class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+class TCPOSCServer(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
-    clients: list[socketserver.BaseRequestHandler]
+    clients: list[TCPOSCRequestHandler]
+    _server_thread: Optional[threading.Thread]
 
+    def __init__(self, server_address: Tuple[str, int], RequestHandlerClass: type[DispatchedOSCRequestHandler]) -> None:
+        self._server_thread = None
+        super().__init__(server_address, RequestHandlerClass)
 
-class SharedTCPServer():
-    clients: list[socketserver.BaseRequestHandler]
-
-    def __init__(self, RequestHandler: type[socketserver.BaseRequestHandler], port: int = 4301, addr: str = "0.0.0.0"):
+    def server_activate(self) -> None:
         self.clients = []
-
-        self.server = ThreadedTCPServer((addr, port), RequestHandler)
-        self.server.clients = self.clients
-        self.server_thread = threading.Thread(target=self.server.serve_forever)
-        self.server_thread.daemon = True
-        self.server_thread.start()
+        super().server_activate()
 
     def shutdown(self) -> None:
-        for c in self.server.clients:
+        for c in self.clients:
             try:
                 c.request.shutdown(socket.SHUT_RDWR)
             except OSError:
                 pass
             finally:
                 c.request.close()
-        self.server.shutdown()
-        self.server_thread.join()
+        super().shutdown()
+
+    def start(self) -> None:
+        if self._server_thread is not None:
+            raise RuntimeError
+        self._server_thread = threading.Thread(target=self.serve_forever)
+        self._server_thread.start()
+
+    def stop(self) -> None:
+        if self._server_thread is None:
+            raise RuntimeError
+        self.shutdown()
+        self._server_thread.join()
 
 
-def getIPv4Addresses() -> dict[str, Any]:
+def getIPv4Addresses() -> dict[str, str]:
     ret = {}
     for i in netifaces.interfaces():
         if i == 'lo':
@@ -172,16 +168,32 @@ def getIPv4Addresses() -> dict[str, Any]:
     return ret
 
 
-def zc_register_osc_tcp(port: int = 4301, oscname: str = "OSCLive") -> list[tuple[Zeroconf, ServiceInfo]]:
-    zc_service = "_osc._tcp.local."
-    zc_name = oscname + "." + zc_service
-    zc_svcs = []
-    # Workaround to publish all IP addresses
-    for ifname, ip in getIPv4Addresses().items():
-        zc_name = f"{oscname}_{ifname}.{zc_service}"
-        si = ServiceInfo(zc_service, zc_name, port, addresses=[ip])
-        zc = Zeroconf([ip])
-        zc.register_service(si)
-        print("Zeroconf register %s on IP %s" % (zc_name, ip))
-        zc_svcs.append((zc, si))
-    return zc_svcs
+class ZCPublisher(threading.Thread):
+    def __init__(self, name: str, port: int, allowed_ips: list[str] | None = None) -> None:
+        self._stop_event = threading.Event()
+        self._zc_svcs: dict[str, tuple[Zeroconf, ServiceInfo]] = {}
+        super().__init__(target=self._run, args=(port, name, allowed_ips))
+        self.start()
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        self.join()
+
+    def _run(self, port: int, name: str, allowed_ips: list[str] | None) -> None:
+        zc_service = "_osc._tcp.local."
+
+        while not self._stop_event.is_set():
+            # Workaround to publish all IP addresses
+            for ifname, ip in getIPv4Addresses().items():
+                zc_name = f"{name}_{ifname}_{port}.{zc_service}"
+                if ip in self._zc_svcs or (allowed_ips is not None and ip not in allowed_ips):
+                    continue
+                si = ServiceInfo(zc_service, zc_name, port, addresses=[ip])  # type: ignore[list-item]
+                zc = Zeroconf([ip])
+                zc.register_service(si)
+                print("Zeroconf register %s on IP %s" % (zc_name, ip))
+                self._zc_svcs.update({ip: (zc, si)})
+            time.sleep(1)
+
+        for ip, (zc, si) in self._zc_svcs.items():
+            zc.close()

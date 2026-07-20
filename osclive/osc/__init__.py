@@ -1,3 +1,3 @@
-from .server import SharedTCPServer, zc_register_osc_tcp, DispatchedOSCRequestHandler
+from .server import TCPOSCServer, ZCPublisher, DispatchedOSCRequestHandler, OscValue  # noqa: E402
 
-__all__ = ["SharedTCPServer", "zc_register_osc_tcp", "DispatchedOSCRequestHandler"]
+__all__ = ["TCPOSCServer", "ZCPublisher", "DispatchedOSCRequestHandler", "OscValue"]

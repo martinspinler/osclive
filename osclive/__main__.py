@@ -3,7 +3,7 @@ import time
 import argparse
 
 from . import studiolive
-from .osc import SharedTCPServer, zc_register_osc_tcp
+from .osc import TCPOSCServer, ZCPublisher
 from .handler import SLClientHandler
 
 
@@ -32,7 +32,8 @@ def main() -> None:
 
     if args.config:
         import yaml
-        cfg = yaml.safe_load(open(args.config).read())
+        with open(args.config) as f:
+            cfg = yaml.safe_load(f.read())
         if cfg.get("studiolive"):
             cfg_sl = cfg.get("studiolive")
             if cfg_sl.get("input") and cfg_sl.get("input").get("names"):
@@ -40,16 +41,16 @@ def main() -> None:
             if cfg_sl.get("aux") and cfg_sl.get("aux").get("names"):
                 SLClientHandler.aux_names = cfg_sl["aux"]["names"]
 
-    osc_srv = SharedTCPServer(SLClientHandler)
-    zc_svcs = zc_register_osc_tcp()
+    osc_srv = TCPOSCServer(("0.0.0.0", 4301), SLClientHandler)
+    osc_srv.start()
+    zc = ZCPublisher(name="OSCLive", port=4301)
 
     try:
         while True:
             time.sleep(0.1)
     finally:
-        osc_srv.shutdown()
-        for zc, si in zc_svcs:
-            zc.close()
+        zc.stop()
+        osc_srv.stop()
         sl.disconnect()
 
 
