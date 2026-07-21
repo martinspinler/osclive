@@ -13,10 +13,14 @@ def main() -> None:
     argp.add_argument("-c", "--config", help="Load YAML configuration file", metavar='CFG')
     argp.add_argument("-d", "--debug", help="Print debug informations", action='store_true')
     argp.add_argument("-m", "--midi", help="Use midi port instead of IEEE1394")
+    argp.add_argument("--mock", help="Use mock backend (no hardware)", action='store_true')
     args = argp.parse_args()
 
     slbackend: studiolive.SLBackend
-    if args.uc:
+    if args.mock:
+        from .studiolive.mockbackend import SLMockBackend
+        slbackend = SLMockBackend()
+    elif args.uc:
         from .studiolive.ucbackend import SLUcBackend
         slbackend = SLUcBackend(studiolive.StudioLive1602.uc, args.uc)
     else:
