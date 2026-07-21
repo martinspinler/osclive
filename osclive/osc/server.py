@@ -31,6 +31,13 @@ class TCPOSCRequestHandler(socketserver.BaseRequestHandler):
         self.server.clients.append(self)
         self._bundle: Optional[list[OscMessage]] = None
         self._bundle_inner = 0
+        # Serializes all sends on this connection. init() runs in the handler
+        # thread while level/callback updates run in backend threads; without
+        # this lock concurrent sendall() calls corrupt the TCP stream and
+        # concurrent bundle() state access loses messages.
+        # RLock (reentrant): bundle() may call send_bundle() -> send_msg()
+        # while already holding the lock in the same thread.
+        self._send_lock = threading.RLock()
 
     def _recv(self, size: int) -> bytes:
         recv = bytes()
@@ -65,20 +72,22 @@ class TCPOSCRequestHandler(socketserver.BaseRequestHandler):
 
     @contextmanager
     def bundle(self) -> Generator["TCPOSCRequestHandler", None, None]:
-        if self._bundle_inner == 0:
-            self._bundle = []
-        self._bundle_inner += 1
+        with self._send_lock:
+            if self._bundle_inner == 0:
+                self._bundle = []
+            self._bundle_inner += 1
         try:
             yield self
         finally:
-            self._bundle_inner -= 1
-            if self._bundle_inner == 0:
-                if self._bundle:
-                    bundle_msgs = self._bundle
-                    self._bundle = None
-                    self.send_bundle(bundle_msgs)
-                else:
-                    self._bundle = None
+            with self._send_lock:
+                self._bundle_inner -= 1
+                if self._bundle_inner == 0:
+                    if self._bundle:
+                        bundle_msgs = self._bundle
+                        self._bundle = None
+                        self.send_bundle(bundle_msgs)
+                    else:
+                        self._bundle = None
 
     def send_bundle(self, msg_list: list[OscMessage]) -> None:
         bb = OscBundleBuilder(IMMEDIATELY)
@@ -92,12 +101,18 @@ class TCPOSCRequestHandler(socketserver.BaseRequestHandler):
         for val in values:
             builder.add_arg(val)
         msg = builder.build()
-        if self._bundle is not None:
-            self._bundle.append(msg)
-        else:
-            self.send_msg(msg)
+        with self._send_lock:
+            if self._bundle is not None:
+                self._bundle.append(msg)
+            else:
+                self._send_msg_locked(msg)
 
     def send_msg(self, msg: OscMessage | OscBundle) -> None:
+        with self._send_lock:
+            self._send_msg_locked(msg)
+
+    def _send_msg_locked(self, msg: OscMessage | OscBundle) -> None:
+        # Caller must hold self._send_lock.
         try:
             self.request.sendall(msg.size.to_bytes(length=4, byteorder='big') + msg.dgram)
         except Exception:
